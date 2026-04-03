@@ -8,16 +8,30 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Guard — all admin routes require X-Admin-Key header matching ADMIN_SECRET in .env
+// Guard — HTTP Basic Auth checked against ADMIN_USERNAME / ADMIN_PASSWORD in .env
 function adminGuard(req: Request, res: Response, next: () => void) {
-  const secret = process.env.ADMIN_SECRET
-  if (!secret) {
+  const expectedUser = process.env.ADMIN_USERNAME
+  const expectedPass = process.env.ADMIN_PASSWORD
+
+  if (!expectedUser || !expectedPass) {
     return res.status(503).json({ error: 'Admin access not configured' })
   }
-  const key = req.headers['x-admin-key']
-  if (!key || key !== secret) {
+
+  const authHeader = req.headers['authorization'] || ''
+  if (!authHeader.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="TrustWeb Admin"')
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  const decoded  = Buffer.from(authHeader.slice(6), 'base64').toString('utf8')
+  const [user, ...passParts] = decoded.split(':')
+  const pass = passParts.join(':') // support colons in password
+
+  if (user !== expectedUser || pass !== expectedPass) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="TrustWeb Admin"')
     return res.status(404).json({ error: 'Not found' }) // Disguise as 404
   }
+
   next()
 }
 
