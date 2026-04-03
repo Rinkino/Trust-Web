@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type React from 'react'
 import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
@@ -77,6 +77,38 @@ export default function Dashboard() {
     }
   }, [loading])
 
+  // Debounced Polymarket preview
+  useEffect(() => {
+    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current)
+
+    const isPolymarket = link.toLowerCase().includes('polymarket.com/event/')
+    if (!isPolymarket) {
+      setMarketPreview(null)
+      setPreviewError('')
+      return
+    }
+
+    setPreviewLoading(true)
+    setPreviewError('')
+
+    previewDebounceRef.current = setTimeout(async () => {
+      try {
+        const data = await api.previewMarket(link.trim())
+        setMarketPreview(data)
+        setSelection(null)
+      } catch (err: unknown) {
+        setPreviewError(err instanceof Error ? err.message : 'Could not load market')
+        setMarketPreview(null)
+      } finally {
+        setPreviewLoading(false)
+      }
+    }, 600)
+
+    return () => {
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current)
+    }
+  }, [link])
+
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -103,20 +135,41 @@ export default function Dashboard() {
       return
     }
 
-    setSubmitting(true)
     const platform = detectPlatform(link.trim())
 
+    if (marketPreview) {
+      if (!selection) {
+        setFormError('Please select YES or NO for this market')
+        return
+      }
+      if (marketPreview.closed) {
+        setFormError('This market is already closed — predictions cannot be accepted')
+        return
+      }
+    }
+
+    setSubmitting(true)
+
     try {
+      const isPolymarket = !!marketPreview
       await api.submitPrediction({
-        title: `${platform} — ${code.trim()}`,
-        betslip_code: code.trim(),
-        betslip_link: parsedUrl.href,
-        odds: 2.0,
+        title:            isPolymarket ? marketPreview!.title : `${platform} — ${code.trim()}`,
+        betslip_code:     code.trim(),
+        betslip_link:     parsedUrl.href,
+        odds:             isPolymarket
+                            ? (selection === 'YES' ? marketPreview!.yesOdds : marketPreview!.noOdds)
+                            : 2.0,
         platform,
-        event_start_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        event_start_time: isPolymarket
+                            ? marketPreview!.endDate || new Date(Date.now() + 60 * 60 * 1000).toISOString()
+                            : new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        market_id:        isPolymarket ? marketPreview!.conditionId : undefined,
+        selection:        isPolymarket ? (selection ?? undefined) : undefined,
       })
       setCode('')
       setLink('')
+      setMarketPreview(null)
+      setSelection(null)
       setShowForm(false)
       await loadData()
     } catch (err: unknown) {
@@ -261,6 +314,68 @@ export default function Dashboard() {
                   <span style={{ fontSize: '12px', color: 'var(--success)' }}>
                     Detected: <strong>{detectedPlatform}</strong>
                   </span>
+                </div>
+              )}
+
+              {/* Polymarket preview */}
+              {previewLoading && (
+                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+                  Loading market...
+                </div>
+              )}
+
+              {previewError && !previewLoading && (
+                <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--danger)', fontSize: '12px' }}>
+                  {previewError}
+                </div>
+              )}
+
+              {marketPreview && !previewLoading && (
+                <div style={{ marginTop: '12px', padding: '14px', borderRadius: '10px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px', lineHeight: 1.4 }}>
+                    {marketPreview.title}
+                  </p>
+                  {marketPreview.endDate && (
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                      Ends {new Date(marketPreview.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
+                  {marketPreview.closed ? (
+                    <p style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>
+                      Market closed — winner: {marketPreview.winner ?? 'unknown'}
+                    </p>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Your selection
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {(['YES', 'NO'] as const).map(opt => {
+                          const odds = opt === 'YES' ? marketPreview.yesOdds : marketPreview.noOdds
+                          const active = selection === opt
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setSelection(opt)}
+                              style={{
+                                flex: 1, padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                                border: active ? '1.5px solid var(--accent)' : '1.5px solid var(--border)',
+                                background: active ? 'rgba(124,58,237,0.15)' : 'transparent',
+                                color: active ? 'var(--accent)' : 'var(--text-muted)',
+                                cursor: 'pointer', transition: 'all 0.15s',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+                              }}
+                            >
+                              <span>{opt}</span>
+                              <span style={{ fontSize: '11px', fontWeight: 400 }}>{odds.toFixed(2)}x</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -24,11 +24,17 @@ export default function Feed() {
   const [trending, setTrending]     = useState<LeaderboardUser[]>([])
   const [tab, setTab]               = useState<'feed' | 'leaderboard' | 'trending'>('feed')
   const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
 
   useEffect(() => {
-    Promise.all([api.getFeed(), api.getLeaderboard(), api.getTrending()]).then(([f, l, t]) => {
-      setFeed(f); setLeaderboard(l); setTrending(t); setLoading(false)
-    })
+    Promise.all([api.getFeed(), api.getLeaderboard(), api.getTrending()])
+      .then(([f, l, t]) => {
+        setFeed(f); setLeaderboard(l); setTrending(t)
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : 'Failed to load feed')
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const tabs = [
@@ -41,6 +47,14 @@ export default function Feed() {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px', color: 'var(--text-muted)' }}>
       <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
       Loading...
+    </div>
+  )
+
+  if (error) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '8px', color: 'var(--text-muted)', textAlign: 'center' }}>
+      <p style={{ fontWeight: 600, color: 'var(--danger)' }}>Could not connect to API</p>
+      <p style={{ fontSize: '13px' }}>{error}</p>
+      <p style={{ fontSize: '12px', marginTop: '4px' }}>Make sure the backend is running on port 3001</p>
     </div>
   )
 

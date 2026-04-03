@@ -51,7 +51,7 @@ export async function fetchPolymarketMarket(url: string): Promise<{
     throw new Error(`Gamma API returned ${response.status}`)
   }
 
-  const events: any[] = await response.json()
+  const events = await response.json() as any[]
   if (!events || events.length === 0) {
     throw new Error('No event found for this Polymarket URL')
   }
