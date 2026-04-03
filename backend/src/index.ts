@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import predictionsRouter from './routes/predictions'
 import usersRouter from './routes/users'
+import { startResolutionCron } from './services/resolver'
 
 dotenv.config()
 
@@ -19,4 +20,5 @@ app.use('/api/users', usersRouter)
 
 app.listen(PORT, () => {
   console.log(`Trust-Web API running on http://localhost:${PORT}`)
+  startResolutionCron()
 })

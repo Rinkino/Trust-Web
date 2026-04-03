@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type React from 'react'
 import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
@@ -6,6 +6,16 @@ import ScoreBadge from '../components/ScoreBadge'
 import PredictionCard from '../components/PredictionCard'
 import AnimatedCounter from '../components/AnimatedCounter'
 import { Target, Hash, Award, Link as LinkIcon, Lock, BarChart2 } from 'lucide-react'
+
+type MarketPreview = {
+  conditionId: string
+  title: string
+  endDate: string
+  yesOdds: number
+  noOdds: number
+  closed: boolean
+  winner: 'YES' | 'NO' | null
+}
 
 type Profile = {
   id: string; username: string; credit_score: number; visibility_score: number
@@ -47,10 +57,15 @@ export default function Dashboard() {
   const [winRateAnimated, setWinRateAnimated] = useState(false)
   const barRef = useRef<HTMLDivElement | null>(null)
 
-  const [code, setCode]             = useState('')
-  const [link, setLink]             = useState('')
-  const [formError, setFormError]   = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [code, setCode]                         = useState('')
+  const [link, setLink]                         = useState('')
+  const [formError, setFormError]               = useState('')
+  const [submitting, setSubmitting]             = useState(false)
+  const [marketPreview, setMarketPreview]       = useState<MarketPreview | null>(null)
+  const [previewLoading, setPreviewLoading]     = useState(false)
+  const [previewError, setPreviewError]         = useState('')
+  const [selection, setSelection]               = useState<'YES' | 'NO' | null>(null)
+  const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { loadData() }, [])
 
