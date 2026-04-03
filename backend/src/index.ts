@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import predictionsRouter from './routes/predictions'
 import usersRouter from './routes/users'
+import adminRouter from './routes/admin'
 import { startResolutionCron } from './services/resolver'
 
 dotenv.config()
@@ -17,6 +18,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'Trust-Web A
 
 app.use('/api/predictions', predictionsRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/x7k2-internal', adminRouter)
 
 app.listen(PORT, () => {
   console.log(`Trust-Web API running on http://localhost:${PORT}`)
