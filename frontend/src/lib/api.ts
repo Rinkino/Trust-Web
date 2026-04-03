@@ -18,6 +18,8 @@ export const api = {
     odds: number
     platform: string
     event_start_time: string
+    selection?: string
+    market_id?: string
   }) {
     const headers = await getAuthHeaders()
     const res = await fetch(`${API_URL}/api/predictions`, {
@@ -25,6 +27,12 @@ export const api = {
       headers,
       body: JSON.stringify(payload),
     })
+    if (!res.ok) throw new Error((await res.json()).error)
+    return res.json()
+  },
+
+  async previewMarket(url: string) {
+    const res = await fetch(`${API_URL}/api/predictions/preview?url=${encodeURIComponent(url)}`)
     if (!res.ok) throw new Error((await res.json()).error)
     return res.json()
   },

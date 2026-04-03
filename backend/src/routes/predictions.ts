@@ -1,7 +1,8 @@
-import { Router, Response } from 'express'
+import { Router, Response, Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { calculateScoreUpdate, ScoringContext } from '../services/scoring'
+import { fetchPolymarketMarket } from '../services/platforms/polymarket'
 
 const router = Router()
 
@@ -10,9 +11,25 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Preview a Polymarket market by URL — no auth required
+router.get('/preview', async (req: Request, res: Response) => {
+  const { url } = req.query
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'Missing url query parameter' })
+  }
+  try {
+    const market = await fetchPolymarketMarket(url)
+    return res.json(market)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[preview] Error fetching Polymarket market:', msg)
+    return res.status(502).json({ error: 'Could not fetch market data' })
+  }
+})
+
 // Submit a new prediction
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { title, betslip_code, betslip_link, odds, platform, event_start_time } = req.body
+  const { title, betslip_code, betslip_link, odds, platform, event_start_time, selection, market_id } = req.body
 
   if (!title || !betslip_code || !odds || !platform || !event_start_time) {
     return res.status(400).json({ error: 'Missing required fields' })
@@ -51,6 +68,8 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       event_start_time: eventStart.toISOString(),
       status: 'PENDING',
       locked_at: new Date().toISOString(),
+      market_id: market_id || null,
+      selection: selection || null,
     })
     .select()
     .single()
