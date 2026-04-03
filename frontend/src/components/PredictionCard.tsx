@@ -144,7 +144,7 @@ export default function PredictionCard({ prediction, showUser, onResolve, isOwn,
             {sc.icon}
             {prediction.status}
           </span>
-          {prediction.score_contribution !== undefined && prediction.score_contribution !== 0 && (
+          {prediction.score_contribution != null && prediction.score_contribution !== 0 && (
             <span style={{
               fontSize: '12px', fontWeight: 700,
               color: prediction.score_contribution > 0 ? 'var(--success)' : 'var(--danger)',
