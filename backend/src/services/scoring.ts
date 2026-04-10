@@ -69,7 +69,7 @@ export function calculateScoreUpdate(
     const visibilityDelta = odds * Math.pow(newCorrectStreak, 1.2) * 0.5
 
     return {
-      newCreditScore: ctx.currentCreditScore + creditDelta,
+      newCreditScore: Math.min(100, ctx.currentCreditScore + creditDelta),
       newVisibilityScore: ctx.currentVisibilityScore + visibilityDelta,
       creditDelta,
       visibilityDelta,
@@ -93,7 +93,7 @@ export function calculateScoreUpdate(
   const visibilityDelta = -(basePunishment * Math.pow(newWrongStreak, 1.1) * 0.4)
 
   return {
-    newCreditScore: ctx.currentCreditScore + creditDelta, // can go negative
+    newCreditScore: Math.max(0, ctx.currentCreditScore + creditDelta),
     newVisibilityScore: Math.max(0, ctx.currentVisibilityScore + visibilityDelta),
     creditDelta,
     visibilityDelta,
@@ -118,7 +118,7 @@ export function applyInactivityDecay(ctx: ScoringContext): Partial<ScoringResult
   let newCredit = ctx.currentCreditScore
   if (ctx.daysInactive > 14) {
     const creditDecay = ctx.currentCreditScore * 0.01 // 1% per day after 14 days
-    newCredit = ctx.currentCreditScore - creditDecay
+    newCredit = Math.max(0, ctx.currentCreditScore - creditDecay)
   }
 
   return {
