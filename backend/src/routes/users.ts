@@ -38,6 +38,57 @@ router.get('/trending', async (_req: AuthRequest, res: Response) => {
   res.json(data)
 })
 
+// Get own analytics — score history + platform breakdown + recent form
+router.get('/me/analytics', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!
+
+  const [
+    { data: scoreHistory, error: historyError },
+    { data: predictions, error: predsError },
+  ] = await Promise.all([
+    supabase
+      .from('score_history')
+      .select('credit_before, credit_after, credit_delta, result, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(30),
+
+    supabase
+      .from('predictions')
+      .select('platform, odds, status')
+      .eq('user_id', userId),
+  ])
+
+  if (historyError) return res.status(500).json({ error: historyError.message })
+  if (predsError)   return res.status(500).json({ error: predsError.message })
+
+  const resolved = (predictions || []).filter(p => p.status !== 'PENDING')
+
+  // Platform breakdown
+  const platformCounts: Record<string, number> = {}
+  for (const p of (predictions || [])) {
+    platformCounts[p.platform] = (platformCounts[p.platform] || 0) + 1
+  }
+
+  // Average odds on resolved predictions
+  const avgOdds = resolved.length > 0
+    ? resolved.reduce((sum, p) => sum + p.odds, 0) / resolved.length
+    : null
+
+  // Recent form — last 10 resolved, newest first
+  const recentForm = (predictions || [])
+    .filter(p => p.status !== 'PENDING')
+    .slice(-10)
+    .map(p => p.status)
+
+  res.json({
+    score_history: scoreHistory || [],
+    platform_breakdown: platformCounts,
+    avg_odds: avgOdds !== null ? Math.round(avgOdds * 100) / 100 : null,
+    recent_form: recentForm,
+  })
+})
+
 // Get own profile
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { data, error } = await supabase
@@ -101,6 +152,21 @@ router.patch('/me/username', authMiddleware, async (req: AuthRequest, res: Respo
   if (error) return res.status(500).json({ error: error.message })
 
   res.json(data)
+})
+
+// Delete own account
+router.delete('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!
+
+  // Delete predictions + profile first (or rely on cascade), then auth user
+  await supabase.from('score_history').delete().eq('user_id', userId)
+  await supabase.from('predictions').delete().eq('user_id', userId)
+  await supabase.from('profiles').delete().eq('id', userId)
+
+  const { error } = await supabase.auth.admin.deleteUser(userId)
+  if (error) return res.status(500).json({ error: error.message })
+
+  res.json({ success: true })
 })
 
 export default router

@@ -717,3 +717,61 @@ body {
 .delay-6 {
   animation-delay: 0.6s;
 }
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .page,
+  .page-sm {
+    padding: 16px;
+  }
+
+  /* Prevent iOS from zooming into inputs */
+  .input,
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Hide nav text labels — icons only on small screens */
+  .nav-label,
+  .nav-signout-label {
+    display: none;
+  }
+
+  /* Tabs scroll horizontally instead of wrapping */
+  .tab-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Remove lift hover effect on touch — cards shouldn't jump */
+  .glass-glow:hover {
+    transform: none;
+  }
+
+  /* Full-width buttons on mobile */
+  .btn-accent,
+  .btn-ghost {
+    min-height: 44px;
+  }
+}
+
+/* Ensure tap targets are always large enough */
+button, a {
+  min-height: 36px;
+}
+
+/* Select element matches input style */
+select.input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b8a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}

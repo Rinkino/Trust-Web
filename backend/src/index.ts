@@ -11,7 +11,7 @@ dotenv.config()
 const app = express()
 const PORT = process.env.PORT || 3001
 
-app.use(cors({ origin: 'http://localhost:5173' }))
+app.use(cors({ origin: true }))
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'Trust-Web API' }))
@@ -20,7 +20,7 @@ app.use('/api/predictions', predictionsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/x7k2-internal', adminRouter)
 
-app.listen(PORT, () => {
-  console.log(`Trust-Web API running on http://localhost:${PORT}`)
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Trust-Web API running on http://0.0.0.0:${PORT}`)
   startResolutionCron()
 })

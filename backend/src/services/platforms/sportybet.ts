@@ -2,9 +2,6 @@ import puppeteer, { type Browser } from 'puppeteer-core'
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-const SPORTYBET_URL = 'https://www.sportybet.com'
-
-// Path to system Chrome — set CHROME_PATH in .env to override
 const CHROME_PATH =
   process.env.CHROME_PATH ||
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -21,64 +18,12 @@ async function getBrowser(): Promise<Browser> {
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
       ],
     })
   }
   return browser
-}
-
-async function loginToSportybet(page: Awaited<ReturnType<Browser['newPage']>>): Promise<void> {
-  const email    = process.env.SPORTYBET_EMAIL
-  const password = process.env.SPORTYBET_PASSWORD
-
-  if (!email || !password) {
-    throw new Error('SPORTYBET_EMAIL and SPORTYBET_PASSWORD must be set in .env')
-  }
-
-  await page.goto(`${SPORTYBET_URL}/ng`, { waitUntil: 'networkidle2', timeout: 30000 })
-  await sleep(2000)
-
-  // Click login button
-  await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('button, a'))
-    const loginBtn = buttons.find(el =>
-      el.textContent?.toLowerCase().includes('login') ||
-      el.textContent?.toLowerCase().includes('sign in')
-    ) as HTMLElement | undefined
-    loginBtn?.click()
-  })
-
-  await sleep(2000)
-
-  // Fill in credentials
-  await page.evaluate((e: string, p: string) => {
-    const inputs = Array.from(document.querySelectorAll('input'))
-    const emailInput    = inputs.find(i => i.type === 'email' || i.name?.toLowerCase().includes('email') || i.placeholder?.toLowerCase().includes('email'))
-    const passwordInput = inputs.find(i => i.type === 'password')
-    if (emailInput) {
-      emailInput.value = e
-      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-    if (passwordInput) {
-      passwordInput.value = p
-      passwordInput.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-  }, email, password)
-
-  await sleep(500)
-
-  // Submit
-  await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('button'))
-    const submitBtn = buttons.find(el =>
-      el.textContent?.toLowerCase().includes('login') ||
-      el.textContent?.toLowerCase().includes('sign in') ||
-      el.type === 'submit'
-    ) as HTMLElement | undefined
-    submitBtn?.click()
-  })
-
-  await sleep(3000)
 }
 
 export type SportybetSlip = {
@@ -89,6 +34,10 @@ export type SportybetSlip = {
   status:    'PENDING' | 'WON' | 'LOST' | 'VOID'
 }
 
+/**
+ * Share code pages on Sportybet are publicly accessible — no login needed.
+ * We navigate directly to the share URL and read the result.
+ */
 export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip> {
   const b    = await getBrowser()
   const page = await b.newPage()
@@ -96,59 +45,131 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
   try {
     // Mask automation fingerprint
     await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false })
+      Object.defineProperty(navigator, 'webdriver',          { get: () => false })
+      Object.defineProperty(navigator, 'plugins',            { get: () => [1, 2, 3] })
+      Object.defineProperty(navigator, 'languages',          { get: () => ['en-NG', 'en'] })
+      // @ts-ignore
+      window.chrome = { runtime: {} }
     })
 
     await page.setUserAgent(
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+      'Mozilla/5.0 (Linux; Android 12; SM-A325F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36'
     )
 
-    const shareUrl = `${SPORTYBET_URL}/?shareCode=${shareCode}&c=ng`
-    await page.goto(shareUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-NG,en;q=0.9',
+      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    })
 
-    // If page suggests login is required, authenticate first
-    const needsLogin = await page.evaluate(() =>
-      document.body.innerText.toLowerCase().includes('login') ||
-      document.body.innerText.toLowerCase().includes('sign in')
-    )
+    const shareUrl = `https://www.sportybet.com/?shareCode=${shareCode}&c=ng`
+    await page.goto(shareUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
 
-    if (needsLogin) {
-      await loginToSportybet(page)
-      await page.goto(shareUrl, { waitUntil: 'networkidle2', timeout: 30000 })
-    }
-
-    await sleep(3000)
+    // Give JS time to render the betslip content
+    await sleep(4000)
 
     const slip = await page.evaluate((code: string) => {
-      const bodyText = document.body.innerText.toLowerCase()
+      // ── STATUS DETECTION ────────────────────────────────────────────────────
+      // Look for explicit status elements before falling back to text scanning.
+      // Sportybet renders a result badge/label with a specific class or attribute.
 
-      // Determine status from page text
       let status: 'PENDING' | 'WON' | 'LOST' | 'VOID' = 'PENDING'
-      if (bodyText.includes('won') || bodyText.includes('win'))           status = 'WON'
-      else if (bodyText.includes('lost') || bodyText.includes('lose'))    status = 'LOST'
-      else if (bodyText.includes('void') || bodyText.includes('cancel'))  status = 'VOID'
 
-      // Extract decimal odds (e.g. 2.50, 1.85)
-      const oddsMatch = document.body.innerText.match(/\b(\d+\.\d{2})\b/)
-      const odds = oddsMatch ? parseFloat(oddsMatch[1]) : 2.0
+      // Strategy 1: look for an element that contains ONLY a status word
+      const allElements = Array.from(document.querySelectorAll('*'))
+      const statusEl = allElements.find(el => {
+        const t = el.textContent?.trim().toUpperCase() ?? ''
+        return (t === 'WON' || t === 'LOST' || t === 'VOID' || t === 'WIN' || t === 'LOSE') &&
+               (el as HTMLElement).offsetParent !== null // visible
+      })
 
-      // Extract lines containing team names (vs / v / -)
-      const lines     = document.body.innerText.split('\n').map((l: string) => l.trim()).filter(Boolean)
+      if (statusEl) {
+        const t = statusEl.textContent!.trim().toUpperCase()
+        if (t === 'WON' || t === 'WIN')               status = 'WON'
+        else if (t === 'LOST' || t === 'LOSE')         status = 'LOST'
+        else if (t === 'VOID')                         status = 'VOID'
+      }
+
+      // Strategy 2: look for class names that indicate the result
+      if (status === 'PENDING') {
+        const wonEl  = document.querySelector('[class*="won"],[class*="win"],[class*="Won"],[class*="Win"]')
+        const lostEl = document.querySelector('[class*="lost"],[class*="lose"],[class*="Lost"],[class*="Lose"]')
+        const voidEl = document.querySelector('[class*="void"],[class*="Void"],[class*="cancel"],[class*="Cancel"]')
+        if (wonEl)       status = 'WON'
+        else if (lostEl) status = 'LOST'
+        else if (voidEl) status = 'VOID'
+      }
+
+      // Strategy 3: look for data attributes
+      if (status === 'PENDING') {
+        const dataEl = document.querySelector('[data-status],[data-result],[data-outcome]')
+        if (dataEl) {
+          const val = (
+            dataEl.getAttribute('data-status') ||
+            dataEl.getAttribute('data-result') ||
+            dataEl.getAttribute('data-outcome') ||
+            ''
+          ).toUpperCase()
+          if (val.includes('WON') || val.includes('WIN'))          status = 'WON'
+          else if (val.includes('LOST') || val.includes('LOSE'))   status = 'LOST'
+          else if (val.includes('VOID') || val.includes('CANCEL')) status = 'VOID'
+        }
+      }
+
+      // Strategy 4: scan text lines for standalone status words (last resort)
+      // We only match lines that are short and consist mainly of the status word
+      // to avoid matching "login to win big" style phrases.
+      if (status === 'PENDING') {
+        const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(Boolean)
+        for (const line of lines) {
+          const upper = line.toUpperCase()
+          // Only match if the line is a short status label (≤20 chars)
+          if (upper.length <= 20) {
+            if (upper === 'WON' || upper === 'WIN' || upper.startsWith('BET WON') || upper.startsWith('TICKET WON')) {
+              status = 'WON'; break
+            }
+            if (upper === 'LOST' || upper === 'LOSE' || upper.startsWith('BET LOST') || upper.startsWith('TICKET LOST')) {
+              status = 'LOST'; break
+            }
+            if (upper === 'VOID' || upper.startsWith('BET VOID') || upper.startsWith('CANCELLED')) {
+              status = 'VOID'; break
+            }
+          }
+        }
+      }
+
+      // ── ODDS ────────────────────────────────────────────────────────────────
+      // Find the total odds display — usually the largest decimal number on the page
+      const allText = document.body.innerText
+      const oddsMatches = [...allText.matchAll(/\b(\d+\.\d{2})\b/g)]
+        .map(m => parseFloat(m[1]))
+        .filter(n => n >= 1.01 && n <= 1000)
+      // Take the largest — that's typically the total/accumulator odds
+      const odds = oddsMatches.length > 0 ? Math.max(...oddsMatches) : 2.0
+
+      // ── TEAMS ────────────────────────────────────────────────────────────────
+      const lines = document.body.innerText.split('\n').map((l: string) => l.trim()).filter(Boolean)
       const teamLines = lines.filter((l: string) =>
-        l.includes(' vs ') || l.includes(' v ') || l.includes(' - ')
+        l.includes(' vs ') || l.includes(' v ') || (l.includes(' - ') && l.length < 80)
       )
-      const teams = teamLines.length > 0 ? teamLines : [lines[0] || 'Unknown']
+      const teams = teamLines.length > 0 ? teamLines.slice(0, 5) : [lines[0] || 'Unknown']
 
-      // Best guess at user's selection
+      // ── SELECTION ───────────────────────────────────────────────────────────
       const selectionLine = lines.find((l: string) =>
         l.toLowerCase().includes('home') ||
         l.toLowerCase().includes('away') ||
         l.toLowerCase().includes('draw') ||
-        l.toLowerCase().includes('pick') ||
-        l.toLowerCase().includes('selection')
+        l.toLowerCase().includes('over') ||
+        l.toLowerCase().includes('under') ||
+        l.toLowerCase().includes('1x2')
       )
 
-      return { shareCode: code, teams, selection: selectionLine || teams[0] || 'Unknown', odds, status }
+      return {
+        shareCode: code,
+        teams,
+        selection: selectionLine || teams[0] || 'Unknown',
+        odds,
+        status,
+      }
     }, shareCode)
 
     return slip
