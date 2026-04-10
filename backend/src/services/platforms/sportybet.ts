@@ -1,4 +1,4 @@
-import puppeteer, { type Browser } from 'puppeteer-core'
+import puppeteer, { type Browser, type Page } from 'puppeteer-core'
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -6,11 +6,15 @@ const CHROME_PATH =
   process.env.CHROME_PATH ||
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
+const SPORTYBET_EMAIL    = process.env.SPORTYBET_EMAIL    || ''
+const SPORTYBET_PASSWORD = process.env.SPORTYBET_PASSWORD || ''
+
 let browser: Browser | null = null
+let loggedIn = false
 
 async function getBrowser(): Promise<Browser> {
   if (!browser || !browser.connected) {
-    browser = await puppeteer.launch({
+    browser  = await puppeteer.launch({
       headless: true,
       executablePath: CHROME_PATH,
       args: [
@@ -22,8 +26,98 @@ async function getBrowser(): Promise<Browser> {
         '--disable-features=IsolateOrigins,site-per-process',
       ],
     })
+    loggedIn = false
   }
   return browser
+}
+
+async function setPageDefaults(page: Page) {
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false })
+    Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3] })
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-NG', 'en'] })
+    // @ts-ignore
+    window.chrome = { runtime: {} }
+  })
+  await page.setUserAgent(
+    'Mozilla/5.0 (Linux; Android 12; SM-A325F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36'
+  )
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-NG,en;q=0.9',
+    'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  })
+}
+
+/**
+ * Log in to Sportybet using the service account credentials.
+ * Called once per browser session; result is cached in `loggedIn`.
+ */
+async function ensureLoggedIn(): Promise<void> {
+  if (loggedIn || !SPORTYBET_EMAIL || !SPORTYBET_PASSWORD) return
+
+  const b    = await getBrowser()
+  const page = await b.newPage()
+  try {
+    await setPageDefaults(page)
+    await page.goto('https://www.sportybet.com/ng/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await sleep(2000)
+
+    // Click login / sign-in button — try several selectors
+    const loginSelectors = [
+      'a[href*="login"]',
+      'button[class*="login"]',
+      '[class*="loginBtn"]',
+      '[data-testid*="login"]',
+      'a[class*="login"]',
+    ]
+    let clicked = false
+    for (const sel of loginSelectors) {
+      try {
+        await page.click(sel)
+        clicked = true
+        break
+      } catch {}
+    }
+    if (!clicked) {
+      // Try clicking text "Login" or "Sign In"
+      await page.evaluate(() => {
+        const els = Array.from(document.querySelectorAll('a, button'))
+        const el = els.find(e => /^(login|sign in)$/i.test(e.textContent?.trim() ?? ''))
+        if (el) (el as HTMLElement).click()
+      })
+    }
+    await sleep(2000)
+
+    // Fill in email / phone field
+    const emailSelectors = ['input[type="email"]', 'input[name*="phone"]', 'input[name*="email"]', 'input[placeholder*="email"]', 'input[placeholder*="phone"]']
+    for (const sel of emailSelectors) {
+      try {
+        await page.type(sel, SPORTYBET_EMAIL, { delay: 80 })
+        break
+      } catch {}
+    }
+
+    // Fill in password
+    const pwSelectors = ['input[type="password"]', 'input[name*="password"]', 'input[placeholder*="password"]']
+    for (const sel of pwSelectors) {
+      try {
+        await page.type(sel, SPORTYBET_PASSWORD, { delay: 80 })
+        break
+      } catch {}
+    }
+
+    // Submit
+    await page.keyboard.press('Enter')
+    await sleep(3000)
+
+    // Verify login succeeded — page should no longer show "Join Now"
+    const bodyText = await page.evaluate(() => document.body.innerText.toLowerCase())
+    if (!bodyText.includes('join now') && !bodyText.includes('register now')) {
+      loggedIn = true
+    }
+  } finally {
+    await page.close()
+  }
 }
 
 export type SportybetSlip = {
@@ -35,52 +129,44 @@ export type SportybetSlip = {
 }
 
 /**
- * Share code pages on Sportybet are publicly accessible — no login needed.
- * We navigate directly to the share URL and read the result.
+ * Share code pages on Sportybet are publicly accessible but may require login
+ * depending on region/geo. We try without login first; if a login wall is hit
+ * and credentials are configured, we log in and retry once.
  */
 export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip> {
+  const result = await _fetchSlip(shareCode)
+  return result
+}
+
+async function _fetchSlip(shareCode: string, retryAfterLogin = true): Promise<SportybetSlip> {
   const b    = await getBrowser()
   const page = await b.newPage()
 
   try {
-    // Mask automation fingerprint
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver',          { get: () => false })
-      Object.defineProperty(navigator, 'plugins',            { get: () => [1, 2, 3] })
-      Object.defineProperty(navigator, 'languages',          { get: () => ['en-NG', 'en'] })
-      // @ts-ignore
-      window.chrome = { runtime: {} }
-    })
-
-    await page.setUserAgent(
-      'Mozilla/5.0 (Linux; Android 12; SM-A325F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36'
-    )
-
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-NG,en;q=0.9',
-      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    })
+    await setPageDefaults(page)
 
     const shareUrl = `https://www.sportybet.com/?shareCode=${shareCode}&c=ng`
     await page.goto(shareUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
-
-    // Give JS time to render the betslip content
     await sleep(4000)
 
-    // Detect login wall — if page shows "Join Now" / "Register" instead of slip, bail out
     const pageText = await page.evaluate(() => document.body.innerText.toLowerCase())
     const loginWallPhrases = ['join now', 'register now', 'sign up', 'create account']
     const isLoginWall = loginWallPhrases.some(phrase => pageText.includes(phrase)) &&
                         !pageText.includes('total odds') && !pageText.includes('booking code')
+
     if (isLoginWall) {
+      if (retryAfterLogin && SPORTYBET_EMAIL && SPORTYBET_PASSWORD) {
+        // Reset login state and try to log in, then retry
+        loggedIn = false
+        await page.close()
+        await ensureLoggedIn()
+        return _fetchSlip(shareCode, false)
+      }
       throw new Error(`Login wall detected for ${shareCode} — cannot read slip`)
     }
 
     const slip = await page.evaluate((code: string) => {
       // ── STATUS DETECTION ────────────────────────────────────────────────────
-      // Look for explicit status elements before falling back to text scanning.
-      // Sportybet renders a result badge/label with a specific class or attribute.
-
       let status: 'PENDING' | 'WON' | 'LOST' | 'VOID' = 'PENDING'
 
       // Strategy 1: look for an element that contains ONLY a status word
@@ -88,7 +174,7 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
       const statusEl = allElements.find(el => {
         const t = el.textContent?.trim().toUpperCase() ?? ''
         return (t === 'WON' || t === 'LOST' || t === 'VOID' || t === 'WIN' || t === 'LOSE') &&
-               (el as HTMLElement).offsetParent !== null // visible
+               (el as HTMLElement).offsetParent !== null
       })
 
       if (statusEl) {
@@ -98,7 +184,7 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
         else if (t === 'VOID')                         status = 'VOID'
       }
 
-      // Strategy 2: look for class names that indicate the result
+      // Strategy 2: class names
       if (status === 'PENDING') {
         const wonEl  = document.querySelector('[class*="won"],[class*="win"],[class*="Won"],[class*="Win"]')
         const lostEl = document.querySelector('[class*="lost"],[class*="lose"],[class*="Lost"],[class*="Lose"]')
@@ -108,7 +194,7 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
         else if (voidEl) status = 'VOID'
       }
 
-      // Strategy 3: look for data attributes
+      // Strategy 3: data attributes
       if (status === 'PENDING') {
         const dataEl = document.querySelector('[data-status],[data-result],[data-outcome]')
         if (dataEl) {
@@ -124,14 +210,11 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
         }
       }
 
-      // Strategy 4: scan text lines for standalone status words (last resort)
-      // We only match lines that are short and consist mainly of the status word
-      // to avoid matching "login to win big" style phrases.
+      // Strategy 4: short status lines (last resort)
       if (status === 'PENDING') {
         const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(Boolean)
         for (const line of lines) {
           const upper = line.toUpperCase()
-          // Only match if the line is a short status label (≤20 chars)
           if (upper.length <= 20) {
             if (upper === 'WON' || upper === 'WIN' || upper.startsWith('BET WON') || upper.startsWith('TICKET WON')) {
               status = 'WON'; break
@@ -147,12 +230,10 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
       }
 
       // ── ODDS ────────────────────────────────────────────────────────────────
-      // Find the total odds display — usually the largest decimal number on the page
-      const allText = document.body.innerText
+      const allText     = document.body.innerText
       const oddsMatches = [...allText.matchAll(/\b(\d+\.\d{2})\b/g)]
         .map(m => parseFloat(m[1]))
         .filter(n => n >= 1.01 && n <= 1000)
-      // Take the largest — that's typically the total/accumulator odds
       const odds = oddsMatches.length > 0 ? Math.max(...oddsMatches) : 2.0
 
       // ── TEAMS ────────────────────────────────────────────────────────────────
@@ -172,13 +253,7 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
         l.toLowerCase().includes('1x2')
       )
 
-      return {
-        shareCode: code,
-        teams,
-        selection: selectionLine || teams[0] || 'Unknown',
-        odds,
-        status,
-      }
+      return { shareCode: code, teams, selection: selectionLine || teams[0] || 'Unknown', odds, status }
     }, shareCode)
 
     return slip
@@ -195,6 +270,7 @@ export async function checkSporbetSlipStatus(shareCode: string): Promise<'PENDIN
 export async function closeBrowser(): Promise<void> {
   if (browser) {
     await browser.close()
-    browser = null
+    browser  = null
+    loggedIn = false
   }
 }
