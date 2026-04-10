@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { calculateScoreUpdate, ScoringContext } from '../services/scoring'
 import { fetchPolymarketMarket } from '../services/platforms/polymarket'
+import { retrieveSlip } from '../services/platforms/convertbetcodes'
 
 const router = Router()
 
@@ -11,11 +12,25 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Preview a Polymarket market by URL — no auth required
+// Preview a betslip code — no auth required
+// For Polymarket: ?url=...
+// For bookmakers: ?code=HRNXX6&bookie=sportybet:ng
 router.get('/preview', async (req: Request, res: Response) => {
-  const { url } = req.query
+  const { url, code, bookie } = req.query
+
+  if (code && bookie) {
+    try {
+      const slip = await retrieveSlip(String(code), String(bookie))
+      return res.json(slip)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[preview] Error fetching slip:', msg)
+      return res.status(502).json({ error: 'Could not fetch slip data' })
+    }
+  }
+
   if (!url || typeof url !== 'string') {
-    return res.status(400).json({ error: 'Missing url query parameter' })
+    return res.status(400).json({ error: 'Provide either url (Polymarket) or code+bookie (bookmaker)' })
   }
   try {
     const market = await fetchPolymarketMarket(url)
@@ -94,9 +109,12 @@ router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
   res.json(data)
 })
 
-// Get feed — all predictions sorted by user credit score
-router.get('/feed', async (_req: AuthRequest, res: Response) => {
-  const { data, error } = await supabase
+// Get feed — paginated, newest first
+router.get('/feed', async (req: Request, res: Response) => {
+  const limit  = Math.min(Number(req.query.limit)  || 20, 50)
+  const offset = Math.max(Number(req.query.offset) || 0,  0)
+
+  const { data, error, count } = await supabase
     .from('predictions')
     .select(`
       *,
@@ -107,21 +125,20 @@ router.get('/feed', async (_req: AuthRequest, res: Response) => {
         user_state,
         correct_streak
       )
-    `)
+    `, { count: 'exact' })
     .eq('status', 'PENDING')
     .order('locked_at', { ascending: false })
-    .limit(50)
+    .range(offset, offset + limit - 1)
 
   if (error) return res.status(500).json({ error: error.message })
 
-  // Sort by profile credit score
-  const sorted = (data || []).sort((a: any, b: any) => {
-    const scoreA = a.profiles?.credit_score ?? 0
-    const scoreB = b.profiles?.credit_score ?? 0
-    return scoreB - scoreA
+  res.json({
+    items:   data || [],
+    total:   count ?? 0,
+    hasMore: offset + limit < (count ?? 0),
+    offset,
+    limit,
   })
-
-  res.json(sorted)
 })
 
 // Resolve a prediction (manual for MVP)
