@@ -9,6 +9,7 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Feed from './pages/Feed'
+import ProfilePage from './pages/Profile'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="/register"  element={<Navigate to="/login" />} />
               <Route path="/feed"      element={<Feed />} />
               <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
+              <Route path="/u/:username" element={<ProfilePage />} />
             </Routes>
           </div>
           <Footer />

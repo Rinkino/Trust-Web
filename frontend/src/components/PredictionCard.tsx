@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Lock, ExternalLink, Trophy, X, Clock, MinusCircle, Hash, Flame } from 'lucide-react'
 
 type Prediction = {
@@ -72,9 +73,12 @@ export default function PredictionCard({ prediction, showUser, onResolve, isOwn,
             }}>
               {prediction.profiles.username[0].toUpperCase()}
             </div>
-            <span style={{ fontWeight: 600, color: 'var(--accent-light)', fontSize: '14px' }}>
+            <Link
+              to={`/u/${prediction.profiles.username}`}
+              style={{ fontWeight: 600, color: 'var(--accent-light)', fontSize: '14px', textDecoration: 'none' }}
+            >
               @{prediction.profiles.username}
-            </span>
+            </Link>
           </div>
           <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: 'var(--text-muted)', alignItems: 'center' }}>
             <span>{Math.max(0, prediction.profiles.credit_score).toFixed(1)} cr</span>

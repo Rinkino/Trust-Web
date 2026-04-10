@@ -26,11 +26,12 @@ export default function Navbar({ user }: Props) {
     }}>
       <div style={{
         maxWidth: '1100px', margin: '0 auto',
-        padding: '0 24px', height: '60px',
+        padding: '0 16px', height: '56px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '8px',
       }}>
         {/* Logo */}
-        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           <div style={{
             width: '30px', height: '30px',
             background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
@@ -45,37 +46,29 @@ export default function Navbar({ user }: Props) {
           </span>
         </Link>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          {/* Feed is always visible */}
+          <NavLink to="/feed" active={location.pathname === '/feed'} icon={<BarChart2 size={16} strokeWidth={1.5} />}>
+            Feed
+          </NavLink>
+
           {user && (
-            <>
-              <NavLink
-                to="/feed"
-                active={location.pathname === '/feed'}
-                icon={<BarChart2 size={14} strokeWidth={1.5} />}
-              >
-                Feed
-              </NavLink>
-              <NavLink
-                to="/dashboard"
-                active={location.pathname === '/dashboard'}
-                icon={<LayoutDashboard size={14} strokeWidth={1.5} />}
-              >
-                Dashboard
-              </NavLink>
-            </>
+            <NavLink to="/dashboard" active={location.pathname === '/dashboard'} icon={<LayoutDashboard size={16} strokeWidth={1.5} />}>
+              Dashboard
+            </NavLink>
           )}
 
           {/* Theme switcher */}
-          <div style={{ position: 'relative', marginLeft: '4px' }}>
+          <div style={{ position: 'relative', marginLeft: '2px' }}>
             <button
               onClick={() => setShowThemes(v => !v)}
               className="btn-ghost"
               style={{ padding: '8px 10px', gap: '6px', display: 'flex', alignItems: 'center' }}
               title="Switch theme"
             >
-              <Palette size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
+              <Palette size={15} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
               <div style={{
-                width: '8px', height: '8px', borderRadius: '50%',
+                width: '7px', height: '7px', borderRadius: '50%',
                 background: themes.find(t => t.id === theme)?.color,
                 boxShadow: `0 0 6px ${themes.find(t => t.id === theme)?.color}`,
               }} />
@@ -119,11 +112,11 @@ export default function Navbar({ user }: Props) {
           </div>
 
           {user ? (
-            <button onClick={handleSignOut} className="btn-ghost" style={{ marginLeft: '4px' }}>
-              Sign out
+            <button onClick={handleSignOut} className="btn-ghost" style={{ marginLeft: '2px', padding: '8px 12px' }}>
+              <span className="nav-signout-label">Sign out</span>
             </button>
           ) : (
-            <Link to="/login" className="btn-accent" style={{ marginLeft: '8px' }}>
+            <Link to="/login" className="btn-accent" style={{ marginLeft: '4px', padding: '9px 14px' }}>
               Sign In
             </Link>
           )}
@@ -134,39 +127,32 @@ export default function Navbar({ user }: Props) {
 }
 
 function NavLink({
-  to,
-  children,
-  active,
-  icon,
+  to, children, active, icon,
 }: {
-  to: string
-  children: React.ReactNode
-  active: boolean
-  icon?: React.ReactNode
+  to: string; children: React.ReactNode; active: boolean; icon?: React.ReactNode
 }) {
   return (
     <Link
       to={to}
       style={{
-        padding: '7px 14px', borderRadius: '8px',
+        padding: '7px 10px', borderRadius: '8px',
         color: active ? 'var(--text)' : 'var(--text-muted)',
         fontSize: '13px', fontWeight: active ? 600 : 400,
         textDecoration: 'none',
         background: active ? 'var(--surface-2)' : 'transparent',
         transition: 'color 0.15s, background 0.15s',
-        display: 'flex', alignItems: 'center', gap: '6px',
+        display: 'flex', alignItems: 'center', gap: '5px',
         position: 'relative',
       }}
     >
       {icon && <span style={{ opacity: active ? 1 : 0.7 }}>{icon}</span>}
-      {children}
+      <span className="nav-label">{children}</span>
       {active && (
         <span style={{
           position: 'absolute', bottom: '-1px', left: '50%',
           transform: 'translateX(-50%)',
-          width: '20px', height: '2px',
-          background: 'var(--accent)',
-          borderRadius: '1px',
+          width: '16px', height: '2px',
+          background: 'var(--accent)', borderRadius: '1px',
         }} />
       )}
     </Link>
