@@ -231,7 +231,7 @@ export default function Dashboard() {
         const earliest = kickoffs.length > 0
           ? new Date(Math.min(...kickoffs.map(d => d.getTime())))
           : new Date(Date.now() + 3600_000)
-        const title = slipPreview.legs.map(l => l.match).join(' · ')
+        const title = `${platform} — ${code.trim()} (${slipPreview.legCount} ${slipPreview.legCount === 1 ? 'pick' : 'picks'})`
         await api.submitPrediction({
           title,
           betslip_code:     code.trim(),
@@ -704,12 +704,12 @@ export default function Dashboard() {
         {activeTab === 'pending' && (
           pending.length === 0
             ? <Empty icon={<Lock size={32} strokeWidth={1} />} text="No live predictions" sub="Lock a new prediction to get started" />
-            : pending.map((p, i) => <PredictionCard key={p.id} prediction={p} isOwn onResolve={handleResolve} index={i} />)
+            : pending.map((p, i) => <PredictionCard key={p.id} prediction={p} index={i} />)
         )}
         {activeTab === 'history' && (
           resolved.length === 0
             ? <Empty icon={<BarChart2 size={32} strokeWidth={1} />} text="No resolved predictions yet" sub="Resolve your pending predictions to see history" />
-            : resolved.map((p, i) => <PredictionCard key={p.id} prediction={p} isOwn index={i} />)
+            : resolved.map((p, i) => <PredictionCard key={p.id} prediction={p} index={i} />)
         )}
         {activeTab === 'analytics' && (
           !analytics || analytics.score_history.length === 0

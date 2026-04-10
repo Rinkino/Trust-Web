@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Lock, ExternalLink, Trophy, X, Clock, MinusCircle, Hash, Flame } from 'lucide-react'
+import type React from 'react'
 
 type Prediction = {
   id: string
@@ -24,8 +25,6 @@ type Prediction = {
 type Props = {
   prediction: Prediction
   showUser?: boolean
-  onResolve?: (id: string, result: 'WON' | 'LOST' | 'VOID') => void
-  isOwn?: boolean
   index?: number
 }
 
@@ -52,7 +51,7 @@ const statusConfig: Record<string, { cls: string; icon: React.ReactNode; color: 
   },
 }
 
-export default function PredictionCard({ prediction, showUser, onResolve, isOwn, index = 0 }: Props) {
+export default function PredictionCard({ prediction, showUser, index = 0 }: Props) {
   const delayClass = ['', 'delay-1', 'delay-2', 'delay-3'][index % 4]
   const sc = statusConfig[prediction.status] ?? statusConfig.PENDING
 
@@ -177,41 +176,6 @@ export default function PredictionCard({ prediction, showUser, onResolve, isOwn,
         )}
       </div>
 
-      {/* Resolve buttons */}
-      {isOwn && prediction.status === 'PENDING' && onResolve && (
-        <div style={{
-          display: 'flex', gap: '8px',
-          paddingTop: '12px', borderTop: '1px solid var(--border)',
-        }}>
-          {([
-            { r: 'WON' as const,  label: 'Mark Won',  c: 'var(--success)' },
-            { r: 'LOST' as const, label: 'Mark Lost', c: 'var(--danger)' },
-            { r: 'VOID' as const, label: 'Void',      c: 'var(--text-muted)' },
-          ]).map(({ r, label, c }) => (
-            <button
-              key={r}
-              onClick={() => onResolve(prediction.id, r)}
-              style={{
-                flex: r === 'VOID' ? 0 : 1,
-                padding: '8px 12px', borderRadius: '8px',
-                border: `1px solid ${c}44`, background: `${c}11`,
-                color: c, fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                transition: 'background 0.15s, transform 0.15s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = `${c}22`
-                e.currentTarget.style.transform = 'translateY(-1px)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = `${c}11`
-                e.currentTarget.style.transform = 'translateY(0)'
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
