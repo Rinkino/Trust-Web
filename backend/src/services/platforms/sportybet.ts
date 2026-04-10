@@ -67,6 +67,15 @@ export async function fetchSporbetSlip(shareCode: string): Promise<SportybetSlip
     // Give JS time to render the betslip content
     await sleep(4000)
 
+    // Detect login wall — if page shows "Join Now" / "Register" instead of slip, bail out
+    const pageText = await page.evaluate(() => document.body.innerText.toLowerCase())
+    const loginWallPhrases = ['join now', 'register now', 'sign up', 'create account']
+    const isLoginWall = loginWallPhrases.some(phrase => pageText.includes(phrase)) &&
+                        !pageText.includes('total odds') && !pageText.includes('booking code')
+    if (isLoginWall) {
+      throw new Error(`Login wall detected for ${shareCode} — cannot read slip`)
+    }
+
     const slip = await page.evaluate((code: string) => {
       // ── STATUS DETECTION ────────────────────────────────────────────────────
       // Look for explicit status elements before falling back to text scanning.
