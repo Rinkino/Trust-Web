@@ -262,11 +262,6 @@ export default function Dashboard() {
     setSubmitting(false)
   }
 
-  async function handleResolve(id: string, result: 'WON' | 'LOST' | 'VOID') {
-    try { await api.resolvePrediction(id, result); await loadData() }
-    catch (err: unknown) { alert(err instanceof Error ? err.message : String(err)) }
-  }
-
   async function handleChangeUsername(e: React.FormEvent) {
     e.preventDefault()
     setSettingsErr(''); setSettingsMsg(''); setSettingsLoading(true)
