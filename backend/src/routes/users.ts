@@ -9,18 +9,44 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Get leaderboard — sorted by credit score, negative scores shown as unranked publicly
-router.get('/leaderboard', async (_req: AuthRequest, res: Response) => {
+// Search users by username prefix
+router.get('/search', async (req: AuthRequest, res: Response) => {
+  const q = String(req.query.q || '').trim()
+  if (!q) return res.json([])
+
   const { data, error } = await supabase
     .from('profiles')
     .select('id, username, credit_score, visibility_score, correct_streak, user_state, total_resolved, total_correct')
+    .ilike('username', `%${q}%`)
+    .order('credit_score', { ascending: false })
+    .limit(15)
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
+// Get leaderboard — top users by credit score (the credibility window)
+router.get('/leaderboard', async (req: AuthRequest, res: Response) => {
+  // Count total users first to compute top 10%
+  const { count } = await supabase
+    .from('profiles')
+    .select('*', { count: 'exact', head: true })
+    .gt('total_resolved', 2)
+
+  const totalUsers = count ?? 0
+  const topN = Math.max(10, Math.ceil(totalUsers * 0.1)) // top 10% or at least 10
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, credit_score, visibility_score, correct_streak, user_state, total_resolved, total_correct')
+    .gt('total_resolved', 2)   // only users with meaningful track record
     .gt('credit_score', 0)
-    .order('visibility_score', { ascending: false })
-    .limit(50)
+    .order('credit_score', { ascending: false })
+    .limit(topN)
 
   if (error) return res.status(500).json({ error: error.message })
 
-  res.json(data)
+  res.json({ users: data || [], totalUsers })
 })
 
 // Get trending — users with active streaks

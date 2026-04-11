@@ -1,7 +1,5 @@
 import { supabase } from './supabase'
 
-// Empty string = relative URL → goes through Vite proxy → hits backend on Mac
-// Set VITE_API_URL in .env only for production deploys
 const API_URL = import.meta.env.VITE_API_URL || ''
 
 async function getAuthHeaders() {
@@ -25,9 +23,7 @@ export const api = {
   }) {
     const headers = await getAuthHeaders()
     const res = await fetch(`${API_URL}/api/predictions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
+      method: 'POST', headers, body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error((await res.json()).error)
     return res.json()
@@ -48,9 +44,7 @@ export const api = {
   async resolvePrediction(id: string, result: 'WON' | 'LOST' | 'VOID') {
     const headers = await getAuthHeaders()
     const res = await fetch(`${API_URL}/api/predictions/${id}/resolve`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ result }),
+      method: 'PATCH', headers, body: JSON.stringify({ result }),
     })
     if (!res.ok) throw new Error((await res.json()).error)
     return res.json()
@@ -62,26 +56,26 @@ export const api = {
     return res.json()
   },
 
-  async getFeed(offset = 0, limit = 20) {
-    const res = await fetch(`${API_URL}/api/predictions/feed?offset=${offset}&limit=${limit}`)
+  async getFeed(offset = 0, limit = 20, sort: 'visibility' | 'recent' = 'visibility') {
+    const res = await fetch(`${API_URL}/api/predictions/feed?offset=${offset}&limit=${limit}&sort=${sort}`)
     if (!res.ok) throw new Error((await res.json()).error)
-    return res.json() as Promise<{
-      items: any[]
-      total: number
-      hasMore: boolean
-      offset: number
-      limit: number
-    }>
+    return res.json() as Promise<{ items: any[]; total: number; hasMore: boolean; offset: number; limit: number }>
   },
 
   async getLeaderboard() {
     const res = await fetch(`${API_URL}/api/users/leaderboard`)
     if (!res.ok) throw new Error((await res.json()).error)
-    return res.json()
+    return res.json() as Promise<{ users: any[]; totalUsers: number }>
   },
 
   async getTrending() {
     const res = await fetch(`${API_URL}/api/users/trending`)
+    if (!res.ok) throw new Error((await res.json()).error)
+    return res.json()
+  },
+
+  async searchUsers(q: string) {
+    const res = await fetch(`${API_URL}/api/users/search?q=${encodeURIComponent(q)}`)
     if (!res.ok) throw new Error((await res.json()).error)
     return res.json()
   },
@@ -109,9 +103,7 @@ export const api = {
   async updateUsername(username: string) {
     const headers = await getAuthHeaders()
     const res = await fetch(`${API_URL}/api/users/me/username`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ username }),
+      method: 'PATCH', headers, body: JSON.stringify({ username }),
     })
     if (!res.ok) throw new Error((await res.json()).error)
     return res.json()
@@ -119,11 +111,48 @@ export const api = {
 
   async deleteAccount() {
     const headers = await getAuthHeaders()
-    const res = await fetch(`${API_URL}/api/users/me`, {
-      method: 'DELETE',
-      headers,
-    })
+    const res = await fetch(`${API_URL}/api/users/me`, { method: 'DELETE', headers })
     if (!res.ok) throw new Error((await res.json()).error)
     return res.json()
+  },
+
+  async followUser(username: string) {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_URL}/api/follows/${username}`, { method: 'POST', headers })
+    if (!res.ok) throw new Error((await res.json()).error)
+    return res.json()
+  },
+
+  async unfollowUser(username: string) {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_URL}/api/follows/${username}`, { method: 'DELETE', headers })
+    if (!res.ok) throw new Error((await res.json()).error)
+    return res.json()
+  },
+
+  async getFollowStatus(username: string) {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_URL}/api/follows/status/${username}`, { headers })
+    if (!res.ok) return { following: false }
+    return res.json()
+  },
+
+  async getNotifications() {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_URL}/api/follows/notifications`, { headers })
+    if (!res.ok) throw new Error((await res.json()).error)
+    return res.json()
+  },
+
+  async getNotificationCount() {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_URL}/api/follows/notifications/count`, { headers })
+    if (!res.ok) return { count: 0 }
+    return res.json()
+  },
+
+  async markNotificationsRead() {
+    const headers = await getAuthHeaders()
+    await fetch(`${API_URL}/api/follows/notifications/read`, { method: 'PATCH', headers })
   },
 }

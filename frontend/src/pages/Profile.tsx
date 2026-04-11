@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
 import PredictionCard from '../components/PredictionCard'
 import ScoreBadge from '../components/ScoreBadge'
-import { Target, Hash, Award, Flame, ArrowLeft, BarChart2 } from 'lucide-react'
+import { Target, Hash, Award, Flame, ArrowLeft, BarChart2, UserPlus, UserMinus } from 'lucide-react'
 
 type Profile = {
   id: string
@@ -29,23 +30,51 @@ export default function ProfilePage() {
   const { username } = useParams<{ username: string }>()
   const navigate = useNavigate()
 
-  const [profile, setProfile]       = useState<Profile | null>(null)
-  const [predictions, setPredictions] = useState<Prediction[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState('')
-  const [tab, setTab]               = useState<'pending' | 'history'>('history')
+  const [profile, setProfile]           = useState<Profile | null>(null)
+  const [predictions, setPredictions]   = useState<Prediction[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState('')
+  const [tab, setTab]                   = useState<'pending' | 'history'>('history')
+  const [following, setFollowing]       = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id ?? null)
+    })
+  }, [])
 
   useEffect(() => {
     if (!username) return
     api.getProfile(username)
       .then(async (p: Profile) => {
         setProfile(p)
-        const preds = await api.getUserPredictions(p.id)
+        const [preds, followStatus] = await Promise.all([
+          api.getUserPredictions(p.id),
+          api.getFollowStatus(username).catch(() => ({ following: false })),
+        ])
         setPredictions(preds)
+        setFollowing(followStatus.following)
       })
       .catch(() => setError('User not found'))
       .finally(() => setLoading(false))
   }, [username])
+
+  async function handleFollow() {
+    if (!profile) return
+    setFollowLoading(true)
+    try {
+      if (following) {
+        await api.unfollowUser(profile.username)
+        setFollowing(false)
+      } else {
+        await api.followUser(profile.username)
+        setFollowing(true)
+      }
+    } catch {}
+    finally { setFollowLoading(false) }
+  }
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px', color: 'var(--text-muted)' }}>
@@ -115,13 +144,39 @@ export default function ProfilePage() {
             {profile.username[0].toUpperCase()}
           </div>
 
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '2px' }}>
-              @{profile.username}
-            </h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Member since {memberSince}
-            </p>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+              <div>
+                <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '2px' }}>
+                  @{profile.username}
+                </h1>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Member since {memberSince}
+                </p>
+              </div>
+              {/* Follow button — only show if viewing someone else's profile */}
+              {currentUserId && profile.id !== currentUserId && (
+                <button
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                  style={{
+                    padding: '8px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 700,
+                    cursor: followLoading ? 'default' : 'pointer',
+                    border: following ? '1px solid var(--border)' : 'none',
+                    background: following ? 'transparent' : 'var(--accent)',
+                    color: following ? 'var(--text)' : '#fff',
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    transition: 'all 0.15s',
+                    flexShrink: 0,
+                  }}
+                >
+                  {following
+                    ? <><UserMinus size={14} strokeWidth={1.8} />Following</>
+                    : <><UserPlus size={14} strokeWidth={1.8} />Follow</>
+                  }
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -237,6 +292,7 @@ export default function ProfilePage() {
             : pending.map((p, i) => <PredictionCard key={p.id} prediction={p} index={i} />)
         )}
       </div>
+      <div style={{ height: '72px' }} />
     </div>
   )
 }
