@@ -14,6 +14,7 @@ import Explore from './pages/Explore'
 import LeaderboardPage from './pages/LeaderboardPage'
 import Notifications from './pages/Notifications'
 import ProfilePage from './pages/Profile'
+import Admin from './pages/Admin'
 
 export default function App() {
   const [user, setUser]             = useState<User | null>(null)
@@ -46,7 +47,7 @@ export default function App() {
     <ThemeProvider>
       <BrowserRouter>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <Navbar />
+          <Navbar user={user} />
           <div style={{ flex: 1 }}>
             <Routes>
               <Route path="/"              element={<Navigate to="/home" replace />} />
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="/landing"       element={<Home />} />
               <Route path="/dashboard"     element={user ? <Dashboard /> : <Navigate to="/login" />} />
               <Route path="/u/:username"   element={<ProfilePage />} />
+              <Route path="/x7k2-admin"    element={<Admin />} />
             </Routes>
           </div>
           <BottomNav user={user} notifCount={notifCount} />

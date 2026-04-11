@@ -158,4 +158,88 @@ router.get('/', adminGuard, async (_req: Request, res: Response) => {
   }
 })
 
+// Biggest wins — all-time top 30 WON predictions ranked by odds
+router.get('/biggest-wins', adminGuard, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, title, betslip_code, platform, odds, resolved_at, locked_at, profiles(username, credit_score)')
+    .eq('status', 'WON')
+    .order('odds', { ascending: false })
+    .limit(30)
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data || [])
+})
+
+// Live — all currently PENDING predictions with user info
+router.get('/live', adminGuard, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, title, betslip_code, platform, odds, locked_at, event_start_time, profiles(username, credit_score, correct_streak)')
+    .eq('status', 'PENDING')
+    .order('locked_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data || [])
+})
+
+// Full user list — searchable, sorted by credit score
+router.get('/users', adminGuard, async (req: Request, res: Response) => {
+  const q = String(req.query.q || '').trim()
+  const sort = String(req.query.sort || 'credit_score')
+  const validSorts = ['credit_score', 'created_at', 'total_resolved', 'visibility_score']
+  const orderCol = validSorts.includes(sort) ? sort : 'credit_score'
+
+  let query = supabase
+    .from('profiles')
+    .select('id, username, credit_score, visibility_score, correct_streak, wrong_streak, total_resolved, total_correct, user_state, last_resolved_at, days_inactive, created_at')
+    .order(orderCol, { ascending: false })
+    .limit(200)
+
+  if (q) query = query.ilike('username', `%${q}%`)
+
+  const { data, error } = await query
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data || [])
+})
+
+// Activity timeline — last 50 events (new predictions + resolutions)
+router.get('/activity', adminGuard, async (_req: Request, res: Response) => {
+  const [posts, resolutions] = await Promise.all([
+    supabase
+      .from('predictions')
+      .select('id, title, betslip_code, platform, odds, locked_at, profiles(username)')
+      .order('locked_at', { ascending: false })
+      .limit(25),
+    supabase
+      .from('predictions')
+      .select('id, title, betslip_code, platform, odds, status, score_contribution, resolved_at, profiles(username)')
+      .neq('status', 'PENDING')
+      .not('resolved_at', 'is', null)
+      .order('resolved_at', { ascending: false })
+      .limit(25),
+  ])
+
+  const events = [
+    ...(posts.data || []).map(p => ({ type: 'posted', at: p.locked_at, ...p })),
+    ...(resolutions.data || []).map(p => ({ type: 'resolved', at: p.resolved_at, ...p })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 50)
+
+  res.json(events)
+})
+
+// Per-user detail
+router.get('/users/:userId', adminGuard, async (req: Request, res: Response) => {
+  const { userId } = req.params
+
+  const [{ data: profile }, { data: predictions }, { data: history }] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', userId).single(),
+    supabase.from('predictions').select('*').eq('user_id', userId).order('locked_at', { ascending: false }),
+    supabase.from('score_history').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+  ])
+
+  if (!profile) return res.status(404).json({ error: 'User not found' })
+  res.json({ profile, predictions: predictions || [], score_history: history || [] })
+})
+
 export default router
