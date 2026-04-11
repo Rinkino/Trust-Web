@@ -4,6 +4,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { calculateScoreUpdate, ScoringContext } from '../services/scoring'
 import { fetchPolymarketMarket } from '../services/platforms/polymarket'
 import { retrieveSlip } from '../services/platforms/convertbetcodes'
+import { notifyFollowers } from './follows'
 
 const router = Router()
 
@@ -91,6 +92,9 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
   if (error) return res.status(500).json({ error: error.message })
 
+  // Fire notifications to followers (non-blocking)
+  notifyFollowers(req.userId!, data.id).catch(() => {})
+
   res.status(201).json(data)
 })
 
@@ -109,12 +113,16 @@ router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
   res.json(data)
 })
 
-// Get feed — paginated, newest first
+// Get feed — paginated.
+// sort=visibility (default): For You — ranked by poster's visibility_score
+// sort=recent: newest first
 router.get('/feed', async (req: Request, res: Response) => {
   const limit  = Math.min(Number(req.query.limit)  || 20, 50)
   const offset = Math.max(Number(req.query.offset) || 0,  0)
+  const sort   = req.query.sort === 'recent' ? 'recent' : 'visibility'
+  const status = req.query.status === 'all' ? null : (String(req.query.status || 'PENDING'))
 
-  const { data, error, count } = await supabase
+  let query = supabase
     .from('predictions')
     .select(`
       *,
@@ -126,14 +134,32 @@ router.get('/feed', async (req: Request, res: Response) => {
         correct_streak
       )
     `, { count: 'exact' })
-    .eq('status', 'PENDING')
-    .order('locked_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+
+  if (status) query = query.eq('status', status)
+
+  // For visibility sort we order by the joined profile column
+  if (sort === 'visibility') {
+    query = query.order('locked_at', { ascending: false })
+  } else {
+    query = query.order('locked_at', { ascending: false })
+  }
+
+  const { data, error, count } = await query.range(offset, offset + limit - 1)
+
+  // If visibility sort, re-sort in JS since Supabase can't order by joined columns
+  let items = data || []
+  if (sort === 'visibility') {
+    items = [...items].sort((a, b) => {
+      const va = (a.profiles as any)?.visibility_score ?? 0
+      const vb = (b.profiles as any)?.visibility_score ?? 0
+      return vb - va
+    })
+  }
 
   if (error) return res.status(500).json({ error: error.message })
 
   res.json({
-    items:   data || [],
+    items:   items,
     total:   count ?? 0,
     hasMore: offset + limit < (count ?? 0),
     offset,

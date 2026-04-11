@@ -41,7 +41,7 @@ export default function Feed() {
       api.getLeaderboard(),
       api.getTrending(),
     ])
-      .then(([, l, t]) => { setLeaderboard(l); setTrending(t) })
+      .then(([, l, t]) => { setLeaderboard((l as any)?.users ?? l ?? []); setTrending(t) })
       .catch(err => setError(err instanceof Error ? err.message : 'Failed to load'))
       .finally(() => setInitialLoading(false))
   }, [])

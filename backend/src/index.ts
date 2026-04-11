@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import predictionsRouter from './routes/predictions'
 import usersRouter from './routes/users'
 import adminRouter from './routes/admin'
+import followsRouter from './routes/follows'
 import { startResolutionCron } from './services/resolver'
 
 dotenv.config()
@@ -18,6 +19,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'Trust-Web A
 
 app.use('/api/predictions', predictionsRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/follows', followsRouter)
 app.use('/api/x7k2-internal', adminRouter)
 
 app.listen(Number(PORT), '0.0.0.0', () => {
