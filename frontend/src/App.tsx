@@ -50,7 +50,7 @@ export default function App() {
           <Navbar user={user} />
           <div style={{ flex: 1 }}>
             <Routes>
-              <Route path="/"              element={<Navigate to="/home" replace />} />
+              <Route path="/"              element={user ? <Navigate to="/home" replace /> : <Home />} />
               <Route path="/home"          element={<ForYou />} />
               <Route path="/explore"       element={<Explore />} />
               <Route path="/leaderboard"   element={<LeaderboardPage />} />
