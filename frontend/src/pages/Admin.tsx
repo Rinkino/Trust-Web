@@ -3,7 +3,7 @@ import {
   Users, BarChart2, Zap, Trophy, AlertTriangle,
   Clock, CheckCircle, XCircle, MinusCircle,
   TrendingUp, Flame, Search, RefreshCw, Activity,
-  Lock,
+  Lock, Ticket,
 } from 'lucide-react'
 
 // ── Auth ────────────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ type Overview = {
   flagged_users: { count: number; reason: string; users: any[] }
 }
 
-type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity'
+type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -175,6 +175,8 @@ export default function Admin() {
   const [wins, setWins]         = useState<any[]>([])
   const [users, setUsers]       = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
+  const [tickets, setTickets]   = useState<any[]>([])
+  const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
   const [loading, setLoading]   = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -187,6 +189,7 @@ export default function Admin() {
     if (t === 'wins'     && wins.length && !forceRefresh) return
     if (t === 'users'    && users.length && !forceRefresh) return
     if (t === 'activity' && activity.length && !forceRefresh) return
+    if (t === 'tickets'  && tickets.length && !forceRefresh) return
 
     forceRefresh ? setRefreshing(true) : setLoading(true)
     setError('')
@@ -196,13 +199,32 @@ export default function Admin() {
       if (t === 'wins')     setWins(await adminFetch('/biggest-wins', c))
       if (t === 'users')    setUsers(await adminFetch('/users', c))
       if (t === 'activity') setActivity(await adminFetch('/activity', c))
+      if (t === 'tickets')  setTickets(await adminFetch('/tickets', c))
     } catch (err: any) {
       if (err.message === 'bad_creds') { setCreds(null); sessionStorage.removeItem(ADMIN_KEY) }
       else setError(err.message)
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [overview, live, wins, users, activity])
+  }, [overview, live, wins, users, activity, tickets])
+
+  async function resolveTicket(id: string, result: 'WON' | 'LOST' | 'VOID') {
+    if (!creds) return
+    setResolvingId(id)
+    try {
+      const res = await fetch(`/api/x7k2-internal/tickets/${id}/resolve`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Basic ${btoa(creds)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ result }),
+      })
+      if (res.ok) setTickets(prev => prev.filter(t => t.id !== id))
+    } finally {
+      setResolvingId(null)
+    }
+  }
 
   useEffect(() => {
     if (creds) load(creds, tab)
@@ -218,6 +240,7 @@ export default function Admin() {
     { id: 'wins',      label: 'Big Wins',  icon: <Trophy size={15} strokeWidth={1.5} /> },
     { id: 'users',     label: 'Users',     icon: <Users size={15} strokeWidth={1.5} /> },
     { id: 'activity',  label: 'Activity',  icon: <Activity size={15} strokeWidth={1.5} /> },
+    { id: 'tickets',   label: `Tickets${tickets.length ? ` (${tickets.length})` : ''}`, icon: <Ticket size={15} strokeWidth={1.5} /> },
   ]
 
   const filteredUsers = users.filter(u => !userSearch || u.username.toLowerCase().includes(userSearch.toLowerCase()))
@@ -643,6 +666,105 @@ export default function Admin() {
               </div>
             ))}
             {activity.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No activity yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ── TICKETS ── */}
+      {!loading && tab === 'tickets' && (
+        <div style={{ padding: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            Predictions the resolver could not automatically settle. Verify the result manually then apply WON / LOST / VOID.
+          </p>
+          {tickets.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+              <CheckCircle size={32} strokeWidth={1.5} style={{ marginBottom: '12px', opacity: 0.4 }} />
+              <p>No open tickets — everything resolved automatically.</p>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {tickets.map((p: any) => {
+              const legs = (p.legs || []) as any[]
+              const unresolved = legs.filter((l: any) => !l.fixture_id)
+              const isBusy = resolvingId === p.id
+              return (
+                <div key={p.id} style={{
+                  padding: '16px', borderRadius: '12px',
+                  background: 'var(--surface-2)', border: '1px solid rgba(245,158,11,0.3)',
+                }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '10px' }}>
+                    <AlertTriangle size={15} strokeWidth={1.5} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '13px' }}>{p.profiles?.username ?? '?'}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '1px 7px', background: 'var(--surface)', borderRadius: '4px', border: '1px solid var(--border)' }}>{p.platform}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--accent-light)', fontWeight: 700 }}>×{p.odds}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-subtle)', marginLeft: 'auto' }}>
+                          started {timeAgo(p.event_start_time)}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '13px', color: 'var(--text)', marginBottom: '4px' }}>{p.title}</p>
+                      <div style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>
+                        #{p.betslip_code}
+                        {p.betslip_link && (
+                          <a href={p.betslip_link} target="_blank" rel="noreferrer"
+                            style={{ marginLeft: '8px', color: 'var(--accent)', textDecoration: 'none' }}>
+                            View slip
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Unresolved legs */}
+                  {unresolved.length > 0 && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--warning)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {unresolved.length} leg{unresolved.length > 1 ? 's' : ''} not found in any API
+                      </p>
+                      {unresolved.map((l: any, i: number) => (
+                        <div key={i} style={{
+                          fontSize: '12px', padding: '6px 10px', borderRadius: '6px',
+                          background: 'var(--surface)', border: '1px solid var(--border)',
+                          marginBottom: '4px', color: 'var(--text-muted)',
+                        }}>
+                          {l.home_team} vs {l.away_team}
+                          {l.market_type && <span style={{ marginLeft: '8px', color: 'var(--text-subtle)' }}>{l.market_type} · {l.market_value}</span>}
+                          <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--text-subtle)' }}>{l.tournament}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Review note */}
+                  {p.review_note && (
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', fontStyle: 'italic' }}>{p.review_note}</p>
+                  )}
+
+                  {/* Resolve buttons */}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {(['WON', 'LOST', 'VOID'] as const).map(r => (
+                      <button
+                        key={r}
+                        onClick={() => resolveTicket(p.id, r)}
+                        disabled={isBusy}
+                        style={{
+                          flex: 1, padding: '8px', borderRadius: '8px',
+                          fontSize: '12px', fontWeight: 700, cursor: isBusy ? 'default' : 'pointer',
+                          opacity: isBusy ? 0.5 : 1,
+                          background: r === 'WON' ? 'rgba(16,185,129,0.15)' : r === 'LOST' ? 'rgba(239,68,68,0.15)' : 'var(--surface)',
+                          color: r === 'WON' ? 'var(--success)' : r === 'LOST' ? 'var(--danger)' : 'var(--text-muted)',
+                          border: `1px solid ${r === 'WON' ? 'rgba(16,185,129,0.3)' : r === 'LOST' ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+                        }}
+                      >
+                        {isBusy ? '...' : r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

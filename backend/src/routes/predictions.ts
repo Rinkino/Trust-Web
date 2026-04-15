@@ -4,6 +4,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { calculateScoreUpdate, ScoringContext } from '../services/scoring'
 import { fetchPolymarketMarket } from '../services/platforms/polymarket'
 import { retrieveSlip } from '../services/platforms/convertbetcodes'
+import { buildLegsFromSlip, isVirtualSport } from '../services/platforms/apisports'
 import { notifyFollowers } from './follows'
 
 const router = Router()
@@ -51,12 +52,34 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Missing required fields' })
   }
 
-  if (odds < 1.01) {
-    return res.status(400).json({ error: 'Minimum odds are 1.01' })
+  // Field length limits
+  if (typeof title !== 'string' || title.length > 200) {
+    return res.status(400).json({ error: 'Title must be under 200 characters' })
+  }
+  if (typeof betslip_code !== 'string' || betslip_code.length > 50) {
+    return res.status(400).json({ error: 'Invalid betslip code' })
+  }
+  if (betslip_link && (typeof betslip_link !== 'string' || betslip_link.length > 500)) {
+    return res.status(400).json({ error: 'Invalid betslip link' })
+  }
+
+  // Platform whitelist
+  const ALLOWED_PLATFORMS = ['Sportybet', 'Polymarket', 'Bet9ja', 'BetKing', '1xBet', 'MSport', '22Bet', 'Betano']
+  if (!ALLOWED_PLATFORMS.includes(platform)) {
+    return res.status(400).json({ error: 'Unsupported platform' })
+  }
+
+  // Odds must be a valid finite number
+  const parsedOdds = parseFloat(odds)
+  if (isNaN(parsedOdds) || !isFinite(parsedOdds) || parsedOdds < 1.01 || parsedOdds > 10000) {
+    return res.status(400).json({ error: 'Odds must be a number between 1.01 and 10000' })
   }
 
   // Check event hasn't started yet
   const eventStart = new Date(event_start_time)
+  if (isNaN(eventStart.getTime())) {
+    return res.status(400).json({ error: 'Invalid event start time' })
+  }
   if (eventStart <= new Date()) {
     return res.status(400).json({ error: 'Event has already started — prediction cannot be accepted' })
   }
@@ -72,20 +95,53 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'This betslip code has already been submitted' })
   }
 
+  // For Sportybet slips: fetch structured leg data and look up fixture IDs.
+  // Non-blocking — if this fails the prediction still locks, resolver falls back to Puppeteer.
+  let legs: any[] | null = null
+  const isSportybet = platform?.toLowerCase().includes('sportybet')
+
+  if (isSportybet) {
+    let slip = null
+    try {
+      const bookie = platform.toLowerCase().includes(':') ? platform.toLowerCase() : 'sportybet:ng'
+      slip = await retrieveSlip(betslip_code, bookie)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn('[predictions] Could not fetch slip for', betslip_code, '—', msg)
+    }
+
+    if (slip) {
+      // Block virtual sports — no real-world result exists to verify against
+      const virtualLegs = slip.legs.filter((l: any) => isVirtualSport(l.tournament))
+      if (virtualLegs.length > 0) {
+        const names = [...new Set(virtualLegs.map((l: any) => l.tournament as string))].join(', ')
+        return res.status(400).json({ error: `Virtual sports cannot be submitted: ${names}` })
+      }
+
+      try {
+        legs = await buildLegsFromSlip(slip.legs)
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.warn('[predictions] Could not build legs for', betslip_code, '—', msg)
+      }
+    }
+  }
+
   const { data, error } = await supabase
     .from('predictions')
     .insert({
-      user_id: req.userId,
+      user_id:          req.userId,
       title,
       betslip_code,
-      betslip_link: betslip_link || null,
-      odds: parseFloat(odds),
+      betslip_link:     betslip_link || null,
+      odds:             parsedOdds,
       platform,
       event_start_time: eventStart.toISOString(),
-      status: 'PENDING',
-      locked_at: new Date().toISOString(),
-      market_id: market_id || null,
-      selection: selection || null,
+      status:           'PENDING',
+      locked_at:        new Date().toISOString(),
+      market_id:        market_id || null,
+      selection:        selection || null,
+      legs:             legs,
     })
     .select()
     .single()
@@ -120,7 +176,9 @@ router.get('/feed', async (req: Request, res: Response) => {
   const limit  = Math.min(Number(req.query.limit)  || 20, 50)
   const offset = Math.max(Number(req.query.offset) || 0,  0)
   const sort   = req.query.sort === 'recent' ? 'recent' : 'visibility'
-  const status = req.query.status === 'all' ? null : (String(req.query.status || 'PENDING'))
+  const VALID_STATUSES = ['PENDING', 'WON', 'LOST', 'VOID']
+  const rawStatus = String(req.query.status || 'PENDING')
+  const status = rawStatus === 'all' ? null : (VALID_STATUSES.includes(rawStatus) ? rawStatus : 'PENDING')
 
   let query = supabase
     .from('predictions')

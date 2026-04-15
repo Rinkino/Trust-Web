@@ -11,7 +11,7 @@ const supabase = createClient(
 
 // Search users by username prefix
 router.get('/search', async (req: AuthRequest, res: Response) => {
-  const q = String(req.query.q || '').trim()
+  const q = String(req.query.q || '').trim().slice(0, 50)
   if (!q) return res.json([])
 
   const { data, error } = await supabase
@@ -154,8 +154,14 @@ router.get('/:username', async (req: AuthRequest, res: Response) => {
 router.patch('/me/username', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { username } = req.body
 
-  if (!username || username.length < 3) {
-    return res.status(400).json({ error: 'Username must be at least 3 characters' })
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ error: 'Username is required' })
+  }
+  if (username.length < 3 || username.length > 30) {
+    return res.status(400).json({ error: 'Username must be 3–30 characters' })
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username may only contain letters, numbers, and underscores' })
   }
 
   const { data: existing } = await supabase
