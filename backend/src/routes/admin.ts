@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createClient } from '@supabase/supabase-js'
+import { timingSafeEqual } from 'crypto'
+import { applyResolution } from '../services/resolver'
 
 const router = Router()
 
@@ -27,7 +29,17 @@ function adminGuard(req: Request, res: Response, next: () => void) {
   const [user, ...passParts] = decoded.split(':')
   const pass = passParts.join(':') // support colons in password
 
-  if (user !== expectedUser || pass !== expectedPass) {
+  // Timing-safe comparison — prevents timing attacks that reveal which part is wrong
+  let match = false
+  try {
+    const uMatch = timingSafeEqual(Buffer.from(user), Buffer.from(expectedUser))
+    const pMatch = timingSafeEqual(Buffer.from(pass), Buffer.from(expectedPass))
+    match = uMatch && pMatch
+  } catch {
+    match = false // buffers different length → mismatch
+  }
+
+  if (!match) {
     res.setHeader('WWW-Authenticate', 'Basic realm="TrustWeb Admin"')
     return res.status(404).json({ error: 'Not found' }) // Disguise as 404
   }
@@ -185,7 +197,7 @@ router.get('/live', adminGuard, async (_req: Request, res: Response) => {
 
 // Full user list — searchable, sorted by credit score
 router.get('/users', adminGuard, async (req: Request, res: Response) => {
-  const q = String(req.query.q || '').trim()
+  const q = String(req.query.q || '').trim().slice(0, 100)
   const sort = String(req.query.sort || 'credit_score')
   const validSorts = ['credit_score', 'created_at', 'total_resolved', 'visibility_score']
   const orderCol = validSorts.includes(sort) ? sort : 'credit_score'
@@ -240,6 +252,50 @@ router.get('/users/:userId', adminGuard, async (req: Request, res: Response) => 
 
   if (!profile) return res.status(404).json({ error: 'User not found' })
   res.json({ profile, predictions: predictions || [], score_history: history || [] })
+})
+
+// Resolution tickets — predictions flagged as unresolvable by the cron
+router.get('/tickets', adminGuard, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, title, betslip_code, betslip_link, platform, odds, locked_at, event_start_time, review_note, legs, profiles(username, credit_score)')
+    .eq('needs_review', true)
+    .eq('status', 'PENDING')
+    .order('event_start_time', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data || [])
+})
+
+// Admin manually resolves a ticket
+router.patch('/tickets/:id/resolve', adminGuard, async (req: Request, res: Response) => {
+  const { id }     = req.params
+  const { result } = req.body
+
+  if (!['WON', 'LOST', 'VOID'].includes(result)) {
+    return res.status(400).json({ error: 'result must be WON, LOST, or VOID' })
+  }
+
+  const { data: prediction, error: predError } = await supabase
+    .from('predictions')
+    .select('id, user_id, odds')
+    .eq('id', id)
+    .eq('status', 'PENDING')
+    .single()
+
+  if (predError || !prediction) {
+    return res.status(404).json({ error: 'Prediction not found or already resolved' })
+  }
+
+  try {
+    await applyResolution(supabase, prediction, result as 'WON' | 'LOST' | 'VOID')
+    // Clear the review flag (legs are already nulled by applyResolution)
+    await supabase.from('predictions').update({ needs_review: false, review_note: null }).eq('id', id)
+    res.json({ ok: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(500).json({ error: msg })
+  }
 })
 
 export default router
