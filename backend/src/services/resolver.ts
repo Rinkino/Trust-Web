@@ -171,18 +171,17 @@ async function resolveSporbetPredictions(): Promise<void> {
     }
   }
 
-  if (fixtureIdToMeta.size === 0) return
-
-  console.log(`[resolver] Fetching ${fixtureIdToMeta.size} unique fixture result(s)`)
-
   // --- Step 2: fetch all fixture results in parallel (one call per unique match) ---
   const resultMap = new Map<number, Awaited<ReturnType<typeof getFixtureResult>>>()
-  await Promise.all(
-    [...fixtureIdToMeta.entries()].map(async ([id, { sport, source }]) => {
-      const r = await getFixtureResult(id, sport, source)
-      resultMap.set(id, r)
-    })
-  )
+  if (fixtureIdToMeta.size > 0) {
+    console.log(`[resolver] Fetching ${fixtureIdToMeta.size} unique fixture result(s)`)
+    await Promise.all(
+      [...fixtureIdToMeta.entries()].map(async ([id, { sport, source }]) => {
+        const r = await getFixtureResult(id, sport, source)
+        resultMap.set(id, r)
+      })
+    )
+  }
 
   // --- Step 3: evaluate each prediction ---
   for (const pred of predictions) {
