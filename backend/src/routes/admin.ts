@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'crypto'
 import { applyResolution } from '../services/resolver'
+import { getFixtureResult, buildLegsFromSlip } from '../services/platforms/apisports'
+import { retrieveSlip } from '../services/platforms/convertbetcodes'
 
 const router = Router()
 
@@ -265,6 +267,62 @@ router.get('/tickets', adminGuard, async (_req: Request, res: Response) => {
 
   if (error) return res.status(500).json({ error: error.message })
   res.json(data || [])
+})
+
+// Debug — inspect pending predictions and their legs status
+router.get('/debug/pending', adminGuard, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, title, platform, odds, event_start_time, legs, needs_review, locked_at, profiles(username)')
+    .eq('status', 'PENDING')
+    .order('locked_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  const summary = (data || []).map(p => ({
+    id:               p.id,
+    title:            p.title,
+    platform:         p.platform,
+    user:             (p.profiles as any)?.username,
+    event_start_time: p.event_start_time,
+    locked_at:        p.locked_at,
+    has_legs:         p.legs !== null,
+    leg_count:        Array.isArray(p.legs) ? p.legs.length : 0,
+    legs_with_fixture_id: Array.isArray(p.legs)
+      ? (p.legs as any[]).filter(l => l.fixture_id).length
+      : 0,
+    needs_review:     p.needs_review,
+  }))
+
+  res.json({ total: summary.length, predictions: summary })
+})
+
+// Debug — re-attempt building legs for a prediction that has none
+router.post('/debug/rebuild-legs/:id', adminGuard, async (req: Request, res: Response) => {
+  const { id } = req.params
+
+  const { data: pred, error } = await supabase
+    .from('predictions')
+    .select('id, betslip_code, platform, legs')
+    .eq('id', id)
+    .eq('status', 'PENDING')
+    .single()
+
+  if (error || !pred) return res.status(404).json({ error: 'Prediction not found' })
+
+  const bookie = pred.platform.toLowerCase().includes(':') ? pred.platform.toLowerCase() : 'sportybet:ng'
+
+  try {
+    const slip = await retrieveSlip(pred.betslip_code, bookie)
+    const legs = await buildLegsFromSlip(slip.legs)
+
+    await supabase.from('predictions').update({ legs }).eq('id', id)
+
+    res.json({ ok: true, legs })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(500).json({ error: msg, slip_fetch_failed: true })
+  }
 })
 
 // Admin manually resolves a ticket
