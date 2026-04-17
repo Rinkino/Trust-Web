@@ -3,12 +3,13 @@ import {
   Users, BarChart2, Zap, Trophy, AlertTriangle,
   Clock, CheckCircle, XCircle, MinusCircle,
   TrendingUp, Flame, Search, RefreshCw, Activity,
-  Lock, Ticket,
+  Lock, Ticket, Wrench,
 } from 'lucide-react'
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 
 const ADMIN_KEY = 'tw_admin_auth'
+const ADMIN_API = import.meta.env.VITE_API_URL || ''
 
 const ADMIN_API = import.meta.env.VITE_API_URL || ''
 
@@ -32,7 +33,7 @@ type Overview = {
   flagged_users: { count: number; reason: string; users: any[] }
 }
 
-type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets'
+type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets' | 'debug'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -178,7 +179,9 @@ export default function Admin() {
   const [users, setUsers]       = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
   const [tickets, setTickets]   = useState<any[]>([])
+  const [debug, setDebug]       = useState<{ total: number; predictions: any[] } | null>(null)
   const [resolvingId, setResolvingId] = useState<string | null>(null)
+  const [rebuildingId, setRebuildingId] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
   const [loading, setLoading]   = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -192,6 +195,7 @@ export default function Admin() {
     if (t === 'users'    && users.length && !forceRefresh) return
     if (t === 'activity' && activity.length && !forceRefresh) return
     if (t === 'tickets'  && tickets.length && !forceRefresh) return
+    if (t === 'debug'    && debug && !forceRefresh) return
 
     forceRefresh ? setRefreshing(true) : setLoading(true)
     setError('')
@@ -202,6 +206,7 @@ export default function Admin() {
       if (t === 'users')    setUsers(await adminFetch('/users', c))
       if (t === 'activity') setActivity(await adminFetch('/activity', c))
       if (t === 'tickets')  setTickets(await adminFetch('/tickets', c))
+      if (t === 'debug')    setDebug(await adminFetch('/debug/pending', c))
     } catch (err: any) {
       if (err.message === 'bad_creds') { setCreds(null); sessionStorage.removeItem(ADMIN_KEY) }
       else setError(err.message)
@@ -214,7 +219,7 @@ export default function Admin() {
     if (!creds) return
     setResolvingId(id)
     try {
-      const res = await fetch(`/api/x7k2-internal/tickets/${id}/resolve`, {
+      const res = await fetch(`${ADMIN_API}/api/x7k2-internal/tickets/${id}/resolve`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Basic ${btoa(creds)}`,
@@ -225,6 +230,30 @@ export default function Admin() {
       if (res.ok) setTickets(prev => prev.filter(t => t.id !== id))
     } finally {
       setResolvingId(null)
+    }
+  }
+
+  async function rebuildLegs(id: string) {
+    if (!creds) return
+    setRebuildingId(id)
+    try {
+      const res = await fetch(`${ADMIN_API}/api/x7k2-internal/debug/rebuild-legs/${id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${btoa(creds)}` },
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setDebug(prev => prev ? {
+          ...prev,
+          predictions: prev.predictions.map(p =>
+            p.id === id ? { ...p, has_legs: true, leg_count: data.legs?.length ?? 0, legs_with_fixture_id: (data.legs || []).filter((l: any) => l.fixture_id).length } : p
+          ),
+        } : prev)
+      } else {
+        alert(data.error || 'Failed to rebuild legs')
+      }
+    } finally {
+      setRebuildingId(null)
     }
   }
 
@@ -243,6 +272,7 @@ export default function Admin() {
     { id: 'users',     label: 'Users',     icon: <Users size={15} strokeWidth={1.5} /> },
     { id: 'activity',  label: 'Activity',  icon: <Activity size={15} strokeWidth={1.5} /> },
     { id: 'tickets',   label: `Tickets${tickets.length ? ` (${tickets.length})` : ''}`, icon: <Ticket size={15} strokeWidth={1.5} /> },
+    { id: 'debug',     label: `Debug${debug ? ` (${debug.total})` : ''}`,               icon: <Wrench size={15} strokeWidth={1.5} /> },
   ]
 
   const filteredUsers = users.filter(u => !userSearch || u.username.toLowerCase().includes(userSearch.toLowerCase()))
@@ -668,6 +698,69 @@ export default function Admin() {
               </div>
             ))}
             {activity.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No activity yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ── DEBUG ── */}
+      {!loading && tab === 'debug' && debug && (
+        <div style={{ padding: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            {debug.total} pending prediction{debug.total !== 1 ? 's' : ''}. Predictions without legs are invisible to the auto-resolver — use Rebuild to retry fixture lookup.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {debug.predictions.map((p: any) => {
+              const eventPast = new Date(p.event_start_time) < new Date()
+              const isRebuilding = rebuildingId === p.id
+              return (
+                <div key={p.id} style={{
+                  padding: '14px 16px', borderRadius: '10px',
+                  background: 'var(--surface-2)', border: `1px solid ${!p.has_legs ? 'rgba(239,68,68,0.3)' : p.legs_with_fixture_id < p.leg_count ? 'rgba(245,158,11,0.3)' : 'var(--border)'}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '13px' }}>{p.user ?? '?'}</span>
+                        <span style={{ fontSize: '11px', padding: '1px 7px', background: 'var(--surface)', borderRadius: '4px', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>{p.platform}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--accent-light)', fontWeight: 700 }}>×{p.odds}</span>
+                        {eventPast && <span style={{ fontSize: '11px', color: 'var(--danger)', fontWeight: 600 }}>event passed</span>}
+                      </div>
+                      <p style={{ fontSize: '13px', marginBottom: '6px', color: 'var(--text)' }}>{p.title}</p>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--text-muted)' }}>
+                        <span style={{ color: p.has_legs ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+                          {p.has_legs ? `legs: ${p.legs_with_fixture_id}/${p.leg_count} matched` : 'no legs — resolver blind'}
+                        </span>
+                        <span>locked {timeAgo(p.locked_at)}</span>
+                        <span>starts {new Date(p.event_start_time).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        {p.needs_review && <span style={{ color: 'var(--warning)', fontWeight: 600 }}>flagged for review</span>}
+                      </div>
+                    </div>
+                    {!p.has_legs && (
+                      <button
+                        onClick={() => rebuildLegs(p.id)}
+                        disabled={isRebuilding}
+                        style={{
+                          padding: '7px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                          border: '1px solid var(--border)', background: 'var(--surface)',
+                          color: 'var(--text)', cursor: isRebuilding ? 'default' : 'pointer',
+                          opacity: isRebuilding ? 0.5 : 1, flexShrink: 0,
+                          display: 'flex', alignItems: 'center', gap: '5px',
+                        }}
+                      >
+                        <Wrench size={12} strokeWidth={1.5} />
+                        {isRebuilding ? 'Rebuilding...' : 'Rebuild'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {debug.total === 0 && (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+                <CheckCircle size={32} strokeWidth={1.5} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                <p>No pending predictions.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
