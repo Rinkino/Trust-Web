@@ -278,55 +278,58 @@ export default function Admin() {
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 0 80px' }}>
 
-      {/* Header */}
+      {/* Header + tabs — sticky together so tabs never get covered */}
       <div style={{
         position: 'sticky', top: 56, zIndex: 100,
-        padding: '14px 16px',
-        borderBottom: '1px solid var(--border)',
         backdropFilter: 'blur(20px)',
         backgroundColor: 'color-mix(in srgb, var(--bg) 92%, transparent)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid var(--border)',
       }}>
-        <div>
-          <h1 style={{ fontSize: '17px', fontWeight: 800, lineHeight: 1.2 }}>Control Panel</h1>
-          {o && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Updated {timeAgo(o.generated_at)}</p>}
-        </div>
-        <button
-          onClick={() => load(creds, tab, true)}
-          disabled={refreshing}
-          style={{
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            borderRadius: '8px', padding: '7px 10px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: '5px',
-            fontSize: '12px', color: 'var(--text-muted)',
-          }}
-        >
-          <RefreshCw size={13} strokeWidth={1.5} style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} />
-          Refresh
-        </button>
-      </div>
-
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
-        {tabDefs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
-            flexShrink: 0, padding: '12px 16px', border: 'none', cursor: 'pointer',
-            background: 'transparent',
-            color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
-            fontSize: '13px', fontWeight: tab === t.id ? 700 : 400,
-            display: 'flex', alignItems: 'center', gap: '6px',
-            position: 'relative', transition: 'color 0.15s', whiteSpace: 'nowrap',
-          }}>
-            {t.icon}{t.label}
-            {tab === t.id && (
-              <span style={{
-                position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-                width: '32px', height: '2px', borderRadius: '2px 2px 0 0',
-                background: 'var(--accent)',
-              }} />
-            )}
+        <div style={{
+          padding: '14px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div>
+            <h1 style={{ fontSize: '17px', fontWeight: 800, lineHeight: 1.2 }}>Control Panel</h1>
+            {o && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Updated {timeAgo(o.generated_at)}</p>}
+          </div>
+          <button
+            onClick={() => load(creds, tab, true)}
+            disabled={refreshing}
+            style={{
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+              borderRadius: '8px', padding: '7px 10px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '5px',
+              fontSize: '12px', color: 'var(--text-muted)',
+            }}
+          >
+            <RefreshCw size={13} strokeWidth={1.5} style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} />
+            Refresh
           </button>
-        ))}
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', overflowX: 'auto' }}>
+          {tabDefs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flexShrink: 0, padding: '10px 16px', border: 'none', cursor: 'pointer',
+              background: 'transparent',
+              color: tab === t.id ? 'var(--text)' : 'var(--text-muted)',
+              fontSize: '13px', fontWeight: tab === t.id ? 700 : 400,
+              display: 'flex', alignItems: 'center', gap: '6px',
+              position: 'relative', transition: 'color 0.15s', whiteSpace: 'nowrap',
+            }}>
+              {t.icon}{t.label}
+              {tab === t.id && (
+                <span style={{
+                  position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+                  width: '32px', height: '2px', borderRadius: '2px 2px 0 0',
+                  background: 'var(--accent)',
+                }} />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && <div style={{ padding: '16px', color: 'var(--danger)', fontSize: '13px' }}>{error}</div>}
