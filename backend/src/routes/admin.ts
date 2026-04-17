@@ -303,7 +303,7 @@ router.post('/debug/rebuild-legs/:id', adminGuard, async (req: Request, res: Res
 
   const { data: pred, error } = await supabase
     .from('predictions')
-    .select('id, betslip_code, platform, legs')
+    .select('id, betslip_code, platform, legs, event_start_time')
     .eq('id', id)
     .eq('status', 'PENDING')
     .single()
@@ -314,7 +314,7 @@ router.post('/debug/rebuild-legs/:id', adminGuard, async (req: Request, res: Res
 
   try {
     const slip = await retrieveSlip(pred.betslip_code, bookie)
-    const legs = await buildLegsFromSlip(slip.legs)
+    const legs = await buildLegsFromSlip(slip.legs, pred.event_start_time)
 
     await supabase.from('predictions').update({ legs }).eq('id', id)
 

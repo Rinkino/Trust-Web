@@ -112,8 +112,8 @@ async function getFootballMatchesInWindow(date: string): Promise<any[]> {
   if (dateCache.has(date)) return dateCache.get(date)!
   try {
     const d    = new Date(date)
-    const from = new Date(d.getTime() - 86400000).toISOString().split('T')[0]
-    const to   = new Date(d.getTime() + 86400000).toISOString().split('T')[0]
+    const from = new Date(d.getTime() - 2 * 86400000).toISOString().split('T')[0]
+    const to   = new Date(d.getTime() + 2 * 86400000).toISOString().split('T')[0]
     const data = await fdFetch(`/matches?dateFrom=${from}&dateTo=${to}`)
     const matches = (data.matches || []) as any[]
     dateCache.set(date, matches)
@@ -424,10 +424,19 @@ function parseKickoff(raw: string): Date | null {
   return d
 }
 
+function cleanTournament(raw: string): string {
+  // Strip leading "N." index and surrounding whitespace from ConvertBetCodes HTML
+  return raw.replace(/^\s*\d+\.\s*/s, '').replace(/\s+/g, ' ').trim()
+}
+
 /**
  * Convert raw ConvertBetCodes slip legs into structured PredictionLeg objects.
  * Looks up fixture IDs via the appropriate API for each sport.
  * Non-blocking per leg — if lookup fails, fixture_id stays null.
+ *
+ * @param fallbackDate  ISO date string (YYYY-MM-DD) used when ConvertBetCodes
+ *                      kickoff can't be parsed — typically the prediction's
+ *                      event_start_time.
  */
 export async function buildLegsFromSlip(
   slipLegs: Array<{
@@ -438,27 +447,31 @@ export async function buildLegsFromSlip(
     odds:       number
     kickoff:    string
   }>,
+  fallbackDate?: string,
 ): Promise<PredictionLeg[]> {
   const result: PredictionLeg[] = []
 
   for (const raw of slipLegs) {
-    const sport      = detectSport(raw.tournament)
+    const tournament = cleanTournament(raw.tournament)
+    const sport      = detectSport(tournament)
     const teams      = parseTeams(raw.match)
     const normalized = normalizeMarket(raw.market, raw.selection)
     const kickoffAt  = parseKickoff(raw.kickoff)
+
+    // Use parsed kickoff, fall back to prediction's event_start_time, fall back to today
+    const searchDate = kickoffAt
+      ? kickoffAt.toISOString().split('T')[0]
+      : fallbackDate
+        ? fallbackDate.split('T')[0]
+        : new Date().toISOString().split('T')[0]
 
     let fixtureId: number | null = null
     let canonHome  = teams?.home ?? raw.match
     let canonAway  = teams?.away ?? ''
 
-    if (teams && kickoffAt) {
+    if (teams) {
       try {
-        const found = await searchFixture(
-          teams.home,
-          teams.away,
-          kickoffAt.toISOString().split('T')[0],
-          sport,
-        )
+        const found = await searchFixture(teams.home, teams.away, searchDate, sport)
         if (found) {
           fixtureId = found.fixtureId
           canonHome = found.homeTeam
@@ -477,7 +490,7 @@ export async function buildLegsFromSlip(
       kickoff_at:   kickoffAt?.toISOString() ?? null,
       market_type:  normalized?.marketType  ?? null,
       market_value: normalized?.marketValue ?? null,
-      tournament:   raw.tournament,
+      tournament,
       odds:         raw.odds,
     })
   }

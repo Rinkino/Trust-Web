@@ -119,7 +119,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       }
 
       try {
-        legs = await buildLegsFromSlip(slip.legs)
+        legs = await buildLegsFromSlip(slip.legs, event_start_time)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         console.warn('[predictions] Could not build legs for', betslip_code, '—', msg)
