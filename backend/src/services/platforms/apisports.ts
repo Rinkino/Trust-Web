@@ -22,6 +22,7 @@
 const FD_BASE = 'https://api.football-data.org/v4'
 
 const AS_BASES: Record<string, string> = {
+  football:   'https://v3.football.api-sports.io',   // fallback for leagues not on football-data.org free tier
   basketball: 'https://v1.basketball.api-sports.io',
   tennis:     'https://v1.tennis.api-sports.io',
   hockey:     'https://v1.hockey.api-sports.io',
@@ -45,15 +46,16 @@ export type FixtureResult = {
 }
 
 export type PredictionLeg = {
-  fixture_id:   number | null
-  sport:        string
-  home_team:    string
-  away_team:    string
-  kickoff_at:   string | null
-  market_type:  string | null   // '1x2' | 'btts' | 'over_under'
-  market_value: string | null   // 'home'|'draw'|'away'|'yes'|'no'|'over_2.5' etc
-  tournament:   string
-  odds:         number
+  fixture_id:     number | null
+  fixture_source: 'fd' | 'as' | null   // 'fd' = football-data.org, 'as' = api-sports.io
+  sport:          string
+  home_team:      string
+  away_team:      string
+  kickoff_at:     string | null
+  market_type:    string | null   // '1x2' | 'btts' | 'over_under'
+  market_value:   string | null   // 'home'|'draw'|'away'|'yes'|'no'|'over_2.5' etc
+  tournament:     string
+  odds:           number
 }
 
 // ---------------------------------------------------------------------------
@@ -129,19 +131,64 @@ async function searchFootballFixture(
   awayTeam: string,
   date: string,
 ): Promise<{ fixtureId: number; homeTeam: string; awayTeam: string } | null> {
-  if (!process.env.FOOTBALL_DATA_KEY) return null
+  // --- Try football-data.org first (bulk date window, no extra quota) ---
+  if (process.env.FOOTBALL_DATA_KEY) {
+    const matches = await getFootballMatchesInWindow(date)
+    const match   = matches.find(m =>
+      fuzzyMatch(m.homeTeam.name, homeTeam) &&
+      fuzzyMatch(m.awayTeam.name, awayTeam),
+    )
+    if (match) return { fixtureId: match.id, homeTeam: match.homeTeam.name, awayTeam: match.awayTeam.name }
+  }
 
-  const matches = await getFootballMatchesInWindow(date)
-  const match   = matches.find(m =>
-    fuzzyMatch(m.homeTeam.name, homeTeam) &&
-    fuzzyMatch(m.awayTeam.name, awayTeam),
-  )
-  if (!match) return null
+  // --- Fallback: api-sports.io football (covers Europa/Conference/CONMEBOL/etc.) ---
+  if (!process.env.API_SPORTS_KEY) return null
+  try {
+    const homeId = await getAsTeamId('football', homeTeam)
+    if (!homeId) return null
 
-  return { fixtureId: match.id, homeTeam: match.homeTeam.name, awayTeam: match.awayTeam.name }
+    const data     = await asFetch('football', `/fixtures?team=${homeId}&date=${date}`)
+    const fixtures = (data.response || []) as any[]
+
+    const match = fixtures.find((f: any) =>
+      fuzzyMatch(f.teams?.away?.name ?? '', awayTeam),
+    )
+    if (!match) return null
+
+    return {
+      fixtureId: match.fixture.id as number,
+      homeTeam:  match.teams.home.name as string,
+      awayTeam:  match.teams.away.name as string,
+    }
+  } catch (err) {
+    console.warn('[api-sports football] search error:', err)
+    return null
+  }
 }
 
-async function getFootballResult(fixtureId: number): Promise<FixtureResult | null> {
+async function getFootballResult(fixtureId: number, source: 'fd' | 'as' = 'fd'): Promise<FixtureResult | null> {
+  // api-sports football fixture IDs are flagged with source='as'
+  if (source === 'as') {
+    if (!process.env.API_SPORTS_KEY) return null
+    try {
+      const data    = await asFetch('football', `/fixtures?id=${fixtureId}`)
+      const fixture = data.response?.[0]
+      if (!fixture) return null
+      const finished = ['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(fixture.fixture?.status?.short ?? '')
+      return {
+        fixtureId,
+        homeTeam:  fixture.teams?.home?.name ?? '',
+        awayTeam:  fixture.teams?.away?.name ?? '',
+        homeScore: fixture.goals?.home ?? 0,
+        awayScore: fixture.goals?.away ?? 0,
+        finished,
+      }
+    } catch (err) {
+      console.warn('[api-sports football] getResult error:', err)
+      return null
+    }
+  }
+
   if (!process.env.FOOTBALL_DATA_KEY) return null
   try {
     const data     = await fdFetch(`/matches/${fixtureId}`)
@@ -256,42 +303,57 @@ async function getNonFootballResult(sport: string, fixtureId: number): Promise<F
 
 /**
  * Find a fixture ID for any supported sport.
- * Football → football-data.org, everything else → api-sports.io
+ * Football → football-data.org first, then api-sports.io fallback.
+ * Other sports → api-sports.io directly.
  */
 export async function searchFixture(
   homeTeam: string,
   awayTeam: string,
   date: string,
   sport = 'football',
-): Promise<{ fixtureId: number; homeTeam: string; awayTeam: string } | null> {
+): Promise<{ fixtureId: number; homeTeam: string; awayTeam: string; source: 'fd' | 'as' } | null> {
   const cacheKey = `${sport}:${homeTeam.toLowerCase()}|${awayTeam.toLowerCase()}|${date}`
   if (searchCache.has(cacheKey)) {
     const id = searchCache.get(cacheKey)
-    return id ? { fixtureId: id, homeTeam, awayTeam } : null
+    return id ? { fixtureId: id, homeTeam, awayTeam, source: 'fd' } : null
   }
 
-  const result = sport === 'football'
-    ? await searchFootballFixture(homeTeam, awayTeam, date)
-    : await searchNonFootballFixture(sport, homeTeam, awayTeam, date)
+  let result: { fixtureId: number; homeTeam: string; awayTeam: string } | null = null
+  let source: 'fd' | 'as' = sport === 'football' ? 'fd' : 'as'
+
+  if (sport === 'football') {
+    result = await searchFootballFixture(homeTeam, awayTeam, date)
+    // searchFootballFixture already tries fd then as internally —
+    // detect which one succeeded by checking if fd had the match
+    if (result) {
+      const fdMatches = dateCache.get(date) || []
+      const fromFd = fdMatches.some((m: any) => m.id === result!.fixtureId)
+      source = fromFd ? 'fd' : 'as'
+    }
+  } else {
+    result = await searchNonFootballFixture(sport, homeTeam, awayTeam, date)
+  }
 
   searchCache.set(cacheKey, result?.fixtureId ?? null)
-  return result
+  return result ? { ...result, source } : null
 }
 
 /**
  * Fetch match result for a known fixture ID.
  * sport must match what was used when the fixture was searched.
+ * source distinguishes football-data.org ('fd') from api-sports ('as').
  * Finished results are cached indefinitely.
  */
 export async function getFixtureResult(
   fixtureId: number,
   sport = 'football',
+  source: 'fd' | 'as' = 'fd',
 ): Promise<FixtureResult | null> {
-  const cacheKey = `${sport}:${fixtureId}`
+  const cacheKey = `${sport}:${source}:${fixtureId}`
   if (fixtureCache.has(cacheKey)) return fixtureCache.get(cacheKey)!
 
   const result = sport === 'football'
-    ? await getFootballResult(fixtureId)
+    ? await getFootballResult(fixtureId, source)
     : await getNonFootballResult(sport, fixtureId)
 
   if (result?.finished) fixtureCache.set(cacheKey, result)
@@ -465,7 +527,8 @@ export async function buildLegsFromSlip(
         ? fallbackDate.split('T')[0]
         : new Date().toISOString().split('T')[0]
 
-    let fixtureId: number | null = null
+    let fixtureId:     number | null     = null
+    let fixtureSource: 'fd' | 'as' | null = null
     let canonHome  = teams?.home ?? raw.match
     let canonAway  = teams?.away ?? ''
 
@@ -473,9 +536,10 @@ export async function buildLegsFromSlip(
       try {
         const found = await searchFixture(teams.home, teams.away, searchDate, sport)
         if (found) {
-          fixtureId = found.fixtureId
-          canonHome = found.homeTeam
-          canonAway = found.awayTeam
+          fixtureId     = found.fixtureId
+          fixtureSource = found.source
+          canonHome     = found.homeTeam
+          canonAway     = found.awayTeam
         }
       } catch (err) {
         console.warn(`[fixtures] search failed for ${raw.match} (${sport}):`, err)
@@ -483,7 +547,8 @@ export async function buildLegsFromSlip(
     }
 
     result.push({
-      fixture_id:   fixtureId,
+      fixture_id:     fixtureId,
+      fixture_source: fixtureSource,
       sport,
       home_team:    canonHome,
       away_team:    canonAway,

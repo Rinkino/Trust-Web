@@ -158,25 +158,28 @@ async function resolveSporbetPredictions(): Promise<void> {
 
   console.log(`[resolver] Checking ${predictions.length} Sportybet prediction(s) via match-score`)
 
-  // --- Step 1: collect all unique fixture IDs + their sport across all predictions ---
-  const fixtureIdToSport = new Map<number, string>()
+  // --- Step 1: collect all unique fixture IDs + their sport + source across all predictions ---
+  const fixtureIdToMeta = new Map<number, { sport: string; source: 'fd' | 'as' }>()
   for (const pred of predictions) {
     for (const leg of (pred.legs as any[] || [])) {
       if (leg.fixture_id) {
-        fixtureIdToSport.set(leg.fixture_id as number, leg.sport ?? 'football')
+        fixtureIdToMeta.set(leg.fixture_id as number, {
+          sport:  leg.sport          ?? 'football',
+          source: leg.fixture_source ?? 'fd',
+        })
       }
     }
   }
 
-  if (fixtureIdToSport.size === 0) return
+  if (fixtureIdToMeta.size === 0) return
 
-  console.log(`[resolver] Fetching ${fixtureIdToSport.size} unique fixture result(s)`)
+  console.log(`[resolver] Fetching ${fixtureIdToMeta.size} unique fixture result(s)`)
 
   // --- Step 2: fetch all fixture results in parallel (one call per unique match) ---
   const resultMap = new Map<number, Awaited<ReturnType<typeof getFixtureResult>>>()
   await Promise.all(
-    [...fixtureIdToSport.entries()].map(async ([id, sport]) => {
-      const r = await getFixtureResult(id, sport)
+    [...fixtureIdToMeta.entries()].map(async ([id, { sport, source }]) => {
+      const r = await getFixtureResult(id, sport, source)
       resultMap.set(id, r)
     })
   )
