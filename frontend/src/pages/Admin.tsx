@@ -11,8 +11,6 @@ import {
 const ADMIN_KEY = 'tw_admin_auth'
 const ADMIN_API = import.meta.env.VITE_API_URL || ''
 
-const ADMIN_API = import.meta.env.VITE_API_URL || ''
-
 async function adminFetch(path: string, creds: string) {
   const res = await fetch(`${ADMIN_API}/api/x7k2-internal${path}`, {
     headers: { Authorization: `Basic ${btoa(creds)}` },
