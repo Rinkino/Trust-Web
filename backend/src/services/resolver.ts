@@ -272,7 +272,7 @@ export async function resolveSporbetPredictions(): Promise<void> {
         if (hoursPastLatest <= 3) continue  // too early to resolve
 
         console.log(`[resolver] Attempting AI resolution for ${pred.id}`)
-        const aiResults = await resolveLegsViaAI(legs)
+        const aiResults = await resolveLegsViaAI(legs, pred.event_start_time)
 
         if (aiResults) {
           let aiLost    = false
