@@ -227,33 +227,40 @@ export async function resolveSporbetPredictions(): Promise<void> {
 
       let anyLost           = false
       let anyPending        = false
-      let anyUnresolvable   = false  // fixture_id=null: no API can look this up
+      let anyUnresolvable   = false
+      const legSummaries: string[] = []
 
       for (const leg of legs) {
+        const label = `${leg.home_team ?? '?'} vs ${leg.away_team ?? '?'} (${leg.market_type}:${leg.market_value})`
+
         if (!leg.fixture_id || !leg.market_type || !leg.market_value) {
-          // No fixture_id means we have no way to look up this leg's result
           anyUnresolvable = true
           anyPending      = true
+          legSummaries.push(`${label} → NO_FIXTURE_ID`)
           continue
         }
 
         const fixtureResult = resultMap.get(leg.fixture_id as number)
         if (!fixtureResult) {
-          // fixture_id exists but result unavailable — temporary API issue, retry next cycle
           anyPending = true
+          legSummaries.push(`${label} → RESULT_UNAVAILABLE`)
           continue
         }
 
         const outcome = determineOutcome(fixtureResult, leg.market_type, leg.market_value)
+        const score = fixtureResult.homeScore != null ? `${fixtureResult.homeScore}-${fixtureResult.awayScore}` : 'score unknown'
+        legSummaries.push(`${label} → ${outcome} (${score})`)
 
         if (outcome === 'LOST')    { anyLost    = true; break }
         if (outcome === 'PENDING') { anyPending = true         }
       }
 
+      const autoNote = legSummaries.join(' | ')
+
       if (anyLost) {
-        await applyResolution(supabase, pred, 'LOST')
+        await applyResolution(supabase, pred, 'LOST', { source: 'auto', note: autoNote })
       } else if (!anyPending) {
-        await applyResolution(supabase, pred, 'WON')
+        await applyResolution(supabase, pred, 'WON', { source: 'auto', note: autoNote })
       } else if (anyUnresolvable) {
         // At least one leg has no fixture_id — try AI web search before giving up
         const latestKickoffMs = legs.reduce((latest: number, leg: any) => {
