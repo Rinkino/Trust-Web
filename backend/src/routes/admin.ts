@@ -359,7 +359,7 @@ router.patch('/tickets/:id/resolve', adminGuard, async (req: Request, res: Respo
 router.post('/debug/test-ai/:id', adminGuard, async (req: Request, res: Response) => {
   const { data: pred, error } = await supabase
     .from('predictions')
-    .select('id, legs')
+    .select('id, legs, event_start_time')
     .eq('id', req.params.id)
     .single()
 
@@ -367,7 +367,7 @@ router.post('/debug/test-ai/:id', adminGuard, async (req: Request, res: Response
   if (!pred.legs) return res.status(400).json({ error: 'No legs on this prediction' })
 
   try {
-    const result = await resolveLegsViaAI(pred.legs)
+    const result = await resolveLegsViaAI(pred.legs, pred.event_start_time)
     res.json({ ok: true, groq_key_set: !!process.env.GROQ_API_KEY, result })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
