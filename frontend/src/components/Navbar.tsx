@@ -4,9 +4,9 @@ import { Shield, Palette, LogOut, LayoutDashboard } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Props = { user: { id: string; email?: string } | null }
+type Props = { user: { id: string; email?: string } | null; username?: string | null }
 
-export default function Navbar({ user }: Props) {
+export default function Navbar({ user, username }: Props) {
   const location  = useLocation()
   const navigate  = useNavigate()
   const { theme, setTheme, themes } = useTheme()
@@ -121,7 +121,7 @@ export default function Navbar({ user }: Props) {
                   flexShrink: 0, transition: 'border-color 0.15s',
                 }}
               >
-                {(user.email ?? '?')[0].toUpperCase()}
+                {(username ?? user.email ?? '?')[0].toUpperCase()}
               </button>
               {showMenu && (
                 <div className="animate-fade-in" style={{
