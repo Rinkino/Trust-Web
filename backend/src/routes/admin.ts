@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'crypto'
 import { applyResolution, resolveSporbetPredictions, resolvePolymarketPredictions } from '../services/resolver'
+import { resolveLegsViaAI } from '../services/platforms/airesolver'
 import { getFixtureResult, buildLegsFromSlip } from '../services/platforms/apisports'
 import { retrieveSlip } from '../services/platforms/convertbetcodes'
 
@@ -350,6 +351,25 @@ router.patch('/tickets/:id/resolve', adminGuard, async (req: Request, res: Respo
     // Clear the review flag (legs are already nulled by applyResolution)
     await supabase.from('predictions').update({ needs_review: false, review_note: null }).eq('id', id)
     res.json({ ok: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(500).json({ error: msg })
+  }
+})
+
+router.post('/debug/test-ai/:id', adminGuard, async (req: Request, res: Response) => {
+  const { data: pred, error } = await supabase
+    .from('predictions')
+    .select('id, legs')
+    .eq('id', req.params.id)
+    .single()
+
+  if (error || !pred) return res.status(404).json({ error: 'Not found' })
+  if (!pred.legs) return res.status(400).json({ error: 'No legs on this prediction' })
+
+  try {
+    const result = await resolveLegsViaAI(pred.legs)
+    res.json({ ok: true, groq_key_set: !!process.env.GROQ_API_KEY, result })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     res.status(500).json({ error: msg })
