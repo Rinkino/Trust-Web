@@ -61,6 +61,7 @@ type Prediction = {
   id: string; title: string; betslip_code: string; betslip_link?: string
   odds: number; platform: string; status: 'PENDING' | 'WON' | 'LOST' | 'VOID'
   locked_at: string; resolved_at?: string; score_contribution?: number
+  needs_review?: boolean; review_note?: string
 }
 
 export default function Dashboard() {
