@@ -196,6 +196,23 @@ async function getFootballResult(fixtureId: number, source: 'fd' | 'as' = 'fd'):
     }
   }
 
+  // Check all warmed date windows first — avoids individual API calls entirely
+  for (const matches of dateCache.values()) {
+    const m = matches.find((m: any) => m.id === fixtureId)
+    if (m) {
+      const finished = m.status === 'FINISHED'
+      return {
+        fixtureId,
+        homeTeam:  m.homeTeam?.name  ?? '',
+        awayTeam:  m.awayTeam?.name  ?? '',
+        homeScore: m.score?.fullTime?.home ?? 0,
+        awayScore: m.score?.fullTime?.away ?? 0,
+        finished,
+      }
+    }
+  }
+
+  // Fall back to individual call (only if date cache wasn't pre-warmed)
   if (!process.env.FOOTBALL_DATA_KEY) return null
   try {
     const data     = await fdFetch(`/matches/${fixtureId}`)
@@ -307,6 +324,19 @@ async function getNonFootballResult(sport: string, fixtureId: number): Promise<F
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Pre-warm the date cache for a set of dates so getFixtureResult can serve
+ * football-data.org results from cache without any per-fixture API calls.
+ * Call this in the resolver before fetching individual results.
+ * Fetches sequentially to respect football-data.org's 10 req/min rate limit.
+ */
+export async function prefetchMatchResults(dates: string[]): Promise<void> {
+  const unique = [...new Set(dates)]
+  for (const date of unique) {
+    await getFootballMatchesInWindow(date)
+  }
+}
 
 /**
  * Find a fixture ID for any supported sport.

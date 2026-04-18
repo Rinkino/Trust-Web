@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'crypto'
-import { applyResolution } from '../services/resolver'
+import { applyResolution, resolveSporbetPredictions, resolvePolymarketPredictions } from '../services/resolver'
 import { getFixtureResult, buildLegsFromSlip } from '../services/platforms/apisports'
 import { retrieveSlip } from '../services/platforms/convertbetcodes'
 
@@ -349,6 +349,17 @@ router.patch('/tickets/:id/resolve', adminGuard, async (req: Request, res: Respo
     await applyResolution(supabase, prediction, result as 'WON' | 'LOST' | 'VOID')
     // Clear the review flag (legs are already nulled by applyResolution)
     await supabase.from('predictions').update({ needs_review: false, review_note: null }).eq('id', id)
+    res.json({ ok: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(500).json({ error: msg })
+  }
+})
+
+router.post('/debug/run-resolver', adminGuard, async (_req: Request, res: Response) => {
+  try {
+    await resolveSporbetPredictions()
+    await resolvePolymarketPredictions()
     res.json({ ok: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
