@@ -367,4 +367,15 @@ router.post('/debug/run-resolver', adminGuard, async (_req: Request, res: Respon
   }
 })
 
+router.get('/ai-resolutions', adminGuard, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, betslip_code, title, platform, status, odds, resolved_at, resolution_note, user_id')
+    .eq('resolution_source', 'ai')
+    .order('resolved_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ total: data.length, predictions: data })
+})
+
 export default router
