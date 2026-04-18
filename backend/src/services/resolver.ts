@@ -2,6 +2,7 @@ import cron from 'node-cron'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { fetchPolymarketMarketById } from './platforms/polymarket'
 import { getFixtureResult, determineOutcome, prefetchMatchResults } from './platforms/apisports'
+import { resolveLegsViaAI } from './platforms/airesolver'
 import { calculateScoreUpdate, ScoringContext } from './scoring'
 
 function getSupabase(): SupabaseClient {
@@ -51,7 +52,9 @@ export async function applyResolution(
       status:             result,
       resolved_at:        now,
       score_contribution: scoring.creditDelta,
-      legs:               null,   // strip working metadata after resolution
+      legs:               null,
+      needs_review:       false,
+      review_note:        null,
     })
     .eq('id', prediction.id)
 
@@ -219,18 +222,24 @@ export async function resolveSporbetPredictions(): Promise<void> {
         continue
       }
 
-      let anyLost    = false
-      let anyPending = false
+      let anyLost           = false
+      let anyPending        = false
+      let anyUnresolvable   = false  // fixture_id=null: no API can look this up
 
       for (const leg of legs) {
-        // Leg without fixture_id — unsupported market/sport, can't resolve via API
         if (!leg.fixture_id || !leg.market_type || !leg.market_value) {
-          anyPending = true
+          // No fixture_id means we have no way to look up this leg's result
+          anyUnresolvable = true
+          anyPending      = true
           continue
         }
 
         const fixtureResult = resultMap.get(leg.fixture_id as number)
-        if (!fixtureResult) { anyPending = true; continue }
+        if (!fixtureResult) {
+          // fixture_id exists but result unavailable — temporary API issue, retry next cycle
+          anyPending = true
+          continue
+        }
 
         const outcome = determineOutcome(fixtureResult, leg.market_type, leg.market_value)
 
@@ -242,29 +251,50 @@ export async function resolveSporbetPredictions(): Promise<void> {
         await applyResolution(supabase, pred, 'LOST')
       } else if (!anyPending) {
         await applyResolution(supabase, pred, 'WON')
-      } else {
-        // Still pending — flag for manual review only after the LAST leg's game
-        // has had enough time to finish (kickoff + 3h buffer).
-        // Prevents multi-day accumulators from being flagged prematurely.
-        const legs = pred.legs as any[]
-        const latestKickoffMs = legs.reduce((latest, leg) => {
+      } else if (anyUnresolvable) {
+        // At least one leg has no fixture_id — try AI web search before giving up
+        const latestKickoffMs = legs.reduce((latest: number, leg: any) => {
           if (!leg.kickoff_at) return latest
           return Math.max(latest, new Date(leg.kickoff_at).getTime())
         }, new Date(pred.event_start_time).getTime())
 
         const hoursPastLatest = (Date.now() - latestKickoffMs) / 3_600_000
+        if (hoursPastLatest <= 3) continue  // too early to resolve
 
-        if (hoursPastLatest > 3 && !pred.needs_review) {
-          await supabase
-            .from('predictions')
-            .update({
+        console.log(`[resolver] Attempting AI resolution for ${pred.id}`)
+        const aiResults = await resolveLegsViaAI(legs)
+
+        if (aiResults) {
+          let aiLost    = false
+          let aiPending = false
+
+          for (const r of aiResults) {
+            if (r.outcome === 'LOST')    { aiLost    = true; break }
+            if (r.outcome !== 'WON')     { aiPending = true         }
+          }
+
+          if (aiLost) {
+            await applyResolution(supabase, pred, 'LOST')
+          } else if (!aiPending) {
+            await applyResolution(supabase, pred, 'WON')
+          } else if (!pred.needs_review) {
+            // AI returned UNKNOWN for at least one leg — genuine manual review needed
+            await supabase.from('predictions').update({
               needs_review: true,
-              review_note:  'Fixture result not found via football-data.org or api-sports.io — manual resolution required',
-            })
-            .eq('id', pred.id)
-          console.log(`[resolver] Flagged prediction ${pred.id} for manual review`)
+              review_note:  'AI could not determine result for one or more legs — manual resolution required',
+            }).eq('id', pred.id)
+            console.log(`[resolver] AI could not resolve ${pred.id} — flagged for review`)
+          }
+        } else if (!pred.needs_review) {
+          // AI not configured or failed entirely
+          await supabase.from('predictions').update({
+            needs_review: true,
+            review_note:  'League not covered by results API and AI resolver unavailable — manual resolution required',
+          }).eq('id', pred.id)
+          console.log(`[resolver] Flagged ${pred.id} for manual review (no AI configured)`)
         }
       }
+      // else: fixture_ids exist but results unavailable — stay PENDING, retry next cycle
     } catch (err) {
       console.error(`[resolver] Error evaluating prediction ${pred.id}:`, err)
     }
