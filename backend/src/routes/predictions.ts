@@ -1,5 +1,6 @@
 import { Router, Response, Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
+import rateLimit from 'express-rate-limit'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { calculateScoreUpdate, ScoringContext } from '../services/scoring'
 import { fetchPolymarketMarket } from '../services/platforms/polymarket'
@@ -8,6 +9,16 @@ import { buildLegsFromSlip, isVirtualSport } from '../services/platforms/apispor
 import { notifyFollowers } from './follows'
 
 const router = Router()
+
+// 10 prediction submissions per user per hour
+const submitLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req: any) => req.userId ?? req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many predictions submitted — maximum 10 per hour' },
+})
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -45,7 +56,7 @@ router.get('/preview', async (req: Request, res: Response) => {
 })
 
 // Submit a new prediction
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, submitLimiter, async (req: AuthRequest, res: Response) => {
   const { title, betslip_code, betslip_link, odds, platform, event_start_time, selection, market_id } = req.body
 
   if (!title || !betslip_code || !odds || !platform || !event_start_time) {
@@ -70,7 +81,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 
   // Odds must be a valid finite number
-  const parsedOdds = parseFloat(odds)
+  let parsedOdds = parseFloat(odds)
   if (isNaN(parsedOdds) || !isFinite(parsedOdds) || parsedOdds < 1.01 || parsedOdds > 10000) {
     return res.status(400).json({ error: 'Odds must be a number between 1.01 and 10000' })
   }
@@ -111,6 +122,17 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 
     if (slip) {
+      // Reject already-settled slips — matchesLeft === 0 means all matches are done.
+      // This closes the backdating hole: old winning slips can't be submitted with a future date.
+      if (slip.matchesLeft === 0 && slip.legCount > 0) {
+        return res.status(400).json({ error: 'This slip has already been settled — predictions must be locked before events start' })
+      }
+
+      // Use the slip's verified total odds instead of user-submitted value
+      if (slip.totalOdds > 0) {
+        parsedOdds = slip.totalOdds
+      }
+
       // Block virtual sports — no real-world result exists to verify against
       const virtualLegs = slip.legs.filter((l: any) => isVirtualSport(l.tournament))
       if (virtualLegs.length > 0) {
@@ -180,7 +202,7 @@ router.get('/feed', async (req: Request, res: Response) => {
   const rawStatus = String(req.query.status || 'PENDING')
   const status = rawStatus === 'all' ? null : (VALID_STATUSES.includes(rawStatus) ? rawStatus : 'PENDING')
 
-  let query = supabase
+  const baseQuery = supabase
     .from('predictions')
     .select(`
       *,
@@ -193,31 +215,40 @@ router.get('/feed', async (req: Request, res: Response) => {
       )
     `, { count: 'exact' })
 
-  if (status) query = query.eq('status', status)
+  const filtered = status ? baseQuery.eq('status', status) : baseQuery
 
-  // For visibility sort we order by the joined profile column
   if (sort === 'visibility') {
-    query = query.order('locked_at', { ascending: false })
-  } else {
-    query = query.order('locked_at', { ascending: false })
-  }
+    // Fetch all matching rows, sort by visibility in JS, then paginate.
+    // Supabase cannot ORDER BY a joined column — DB-level pagination would
+    // produce wrong pages. Acceptable cost at current scale (<100 users).
+    const { data, error, count } = await filtered.order('locked_at', { ascending: false })
+    if (error) return res.status(500).json({ error: error.message })
 
-  const { data, error, count } = await query.range(offset, offset + limit - 1)
-
-  // If visibility sort, re-sort in JS since Supabase can't order by joined columns
-  let items = data || []
-  if (sort === 'visibility') {
-    items = [...items].sort((a, b) => {
+    const sorted = [...(data || [])].sort((a, b) => {
       const va = (a.profiles as any)?.visibility_score ?? 0
       const vb = (b.profiles as any)?.visibility_score ?? 0
       return vb - va
     })
+    const items = sorted.slice(offset, offset + limit)
+
+    return res.json({
+      items,
+      total:   count ?? 0,
+      hasMore: offset + limit < (count ?? 0),
+      offset,
+      limit,
+    })
   }
+
+  // recent sort — DB-level pagination is correct here
+  const { data, error, count } = await filtered
+    .order('locked_at', { ascending: false })
+    .range(offset, offset + limit - 1)
 
   if (error) return res.status(500).json({ error: error.message })
 
   res.json({
-    items:   items,
+    items:   data || [],
     total:   count ?? 0,
     hasMore: offset + limit < (count ?? 0),
     offset,

@@ -212,11 +212,18 @@ async function resolveSporbetPredictions(): Promise<void> {
       } else if (!anyPending) {
         await applyResolution(supabase, pred, 'WON')
       } else {
-        // Still pending — check if the event is long overdue and flag for manual review
-        const eventStart    = new Date(pred.event_start_time)
-        const hoursPastStart = (Date.now() - eventStart.getTime()) / 3_600_000
+        // Still pending — flag for manual review only after the LAST leg's game
+        // has had enough time to finish (kickoff + 3h buffer).
+        // Prevents multi-day accumulators from being flagged prematurely.
+        const legs = pred.legs as any[]
+        const latestKickoffMs = legs.reduce((latest, leg) => {
+          if (!leg.kickoff_at) return latest
+          return Math.max(latest, new Date(leg.kickoff_at).getTime())
+        }, new Date(pred.event_start_time).getTime())
 
-        if (hoursPastStart > 12 && !pred.needs_review) {
+        const hoursPastLatest = (Date.now() - latestKickoffMs) / 3_600_000
+
+        if (hoursPastLatest > 3 && !pred.needs_review) {
           await supabase
             .from('predictions')
             .update({
@@ -229,6 +236,31 @@ async function resolveSporbetPredictions(): Promise<void> {
       }
     } catch (err) {
       console.error(`[resolver] Error evaluating prediction ${pred.id}:`, err)
+    }
+  }
+
+  // --- Flag PENDING predictions whose legs were never built ---
+  // These are invisible to the main loop (filtered out by .not('legs', 'is', null'))
+  // but still need to surface for manual review after the event has passed.
+  const { data: nullLegsPreds } = await supabase
+    .from('predictions')
+    .select('id, event_start_time')
+    .eq('status', 'PENDING')
+    .eq('platform', 'Sportybet')
+    .is('legs', null)
+    .eq('needs_review', false)
+
+  for (const pred of (nullLegsPreds || [])) {
+    const hoursPast = (Date.now() - new Date(pred.event_start_time).getTime()) / 3_600_000
+    if (hoursPast > 12) {
+      await supabase
+        .from('predictions')
+        .update({
+          needs_review: true,
+          review_note:  'Leg data could not be built at submission — manual resolution required',
+        })
+        .eq('id', pred.id)
+      console.log(`[resolver] Flagged null-legs prediction ${pred.id} for manual review`)
     }
   }
 }
