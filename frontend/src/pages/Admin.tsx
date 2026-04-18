@@ -234,6 +234,21 @@ export default function Admin() {
     }
   }
 
+  async function resolveDebugTicket(id: string, result: 'WON' | 'LOST' | 'VOID') {
+    if (!creds) return
+    setResolvingId(id)
+    try {
+      const res = await fetch(`${ADMIN_API}/api/x7k2-internal/tickets/${id}/resolve`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Basic ${btoa(creds)}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result }),
+      })
+      if (res.ok) setDebug(prev => prev ? { ...prev, total: prev.total - 1, predictions: prev.predictions.filter(p => p.id !== id) } : prev)
+    } finally {
+      setResolvingId(null)
+    }
+  }
+
   async function rebuildLegs(id: string) {
     if (!creds) return
     setRebuildingId(id)
@@ -755,6 +770,27 @@ export default function Admin() {
                         <Wrench size={12} strokeWidth={1.5} />
                         {isRebuilding ? 'Rebuilding...' : 'Rebuild'}
                       </button>
+                    )}
+                    {eventPast && (
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        {(['WON', 'LOST', 'VOID'] as const).map(r => (
+                          <button
+                            key={r}
+                            onClick={() => resolveDebugTicket(p.id, r)}
+                            disabled={resolvingId === p.id}
+                            style={{
+                              padding: '6px 10px', borderRadius: '7px', fontSize: '11px', fontWeight: 700,
+                              cursor: resolvingId === p.id ? 'default' : 'pointer',
+                              opacity: resolvingId === p.id ? 0.5 : 1,
+                              background: r === 'WON' ? 'rgba(16,185,129,0.15)' : r === 'LOST' ? 'rgba(239,68,68,0.15)' : 'var(--surface)',
+                              color: r === 'WON' ? 'var(--success)' : r === 'LOST' ? 'var(--danger)' : 'var(--text-muted)',
+                              border: `1px solid ${r === 'WON' ? 'rgba(16,185,129,0.3)' : r === 'LOST' ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+                            }}
+                          >
+                            {resolvingId === p.id ? '...' : r}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
