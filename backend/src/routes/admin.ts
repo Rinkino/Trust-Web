@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'crypto'
+import bcrypt from 'bcryptjs'
 import { applyResolution, resolveSporbetPredictions, resolvePolymarketPredictions } from '../services/resolver'
 import { resolveLegsViaAI } from '../services/platforms/airesolver'
 import { getFixtureResult, buildLegsFromSlip } from '../services/platforms/apisports'
@@ -13,38 +14,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Guard — HTTP Basic Auth checked against ADMIN_USERNAME / ADMIN_PASSWORD in .env
-function adminGuard(req: Request, res: Response, next: () => void) {
-  const expectedUser = process.env.ADMIN_USERNAME
-  const expectedPass = process.env.ADMIN_PASSWORD
-
-  if (!expectedUser || !expectedPass) {
-    return res.status(503).json({ error: 'Admin access not configured' })
-  }
-
+// Guard — credentials verified against admin_credentials table (bcrypt hashed)
+async function adminGuard(req: Request, res: Response, next: () => void) {
   const authHeader = req.headers['authorization'] || ''
   if (!authHeader.startsWith('Basic ')) {
     res.setHeader('WWW-Authenticate', 'Basic realm="TrustWeb Admin"')
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const decoded  = Buffer.from(authHeader.slice(6), 'base64').toString('utf8')
+  const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8')
   const [user, ...passParts] = decoded.split(':')
-  const pass = passParts.join(':') // support colons in password
+  const pass = passParts.join(':')
 
-  // Timing-safe comparison — prevents timing attacks that reveal which part is wrong
-  let match = false
-  try {
-    const uMatch = timingSafeEqual(Buffer.from(user), Buffer.from(expectedUser))
-    const pMatch = timingSafeEqual(Buffer.from(pass), Buffer.from(expectedPass))
-    match = uMatch && pMatch
-  } catch {
-    match = false // buffers different length → mismatch
-  }
+  const { data: row } = await supabase
+    .from('admin_credentials')
+    .select('password_hash')
+    .eq('username', user)
+    .single()
 
-  if (!match) {
+  const valid = row ? await bcrypt.compare(pass, row.password_hash) : false
+
+  if (!valid) {
     res.setHeader('WWW-Authenticate', 'Basic realm="TrustWeb Admin"')
-    return res.status(404).json({ error: 'Not found' }) // Disguise as 404
+    return res.status(404).json({ error: 'Not found' })
   }
 
   next()
