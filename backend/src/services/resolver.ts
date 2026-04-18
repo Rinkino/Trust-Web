@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { fetchPolymarketMarketById } from './platforms/polymarket'
-import { getFixtureResult, determineOutcome } from './platforms/apisports'
+import { getFixtureResult, determineOutcome, prefetchMatchResults } from './platforms/apisports'
 import { calculateScoreUpdate, ScoringContext } from './scoring'
 
 function getSupabase(): SupabaseClient {
@@ -92,7 +92,7 @@ export async function applyResolution(
 // Polymarket resolver (unchanged logic, uses applyResolution helper)
 // ---------------------------------------------------------------------------
 
-async function resolvePolymarketPredictions(): Promise<void> {
+export async function resolvePolymarketPredictions(): Promise<void> {
   const supabase = getSupabase()
 
   const { data: predictions, error } = await supabase
@@ -140,7 +140,7 @@ async function resolvePolymarketPredictions(): Promise<void> {
 //     (Puppeteer fallback to be wired in once service account exists)
 // ---------------------------------------------------------------------------
 
-async function resolveSporbetPredictions(): Promise<void> {
+export async function resolveSporbetPredictions(): Promise<void> {
   const supabase = getSupabase()
 
   const { data: predictions, error } = await supabase
@@ -171,7 +171,25 @@ async function resolveSporbetPredictions(): Promise<void> {
     }
   }
 
-  // --- Step 2: fetch all fixture results in parallel (one call per unique match) ---
+  // --- Step 2: warm date cache then fetch results ---
+  // Pre-warm football-data.org date cache (1 call per unique matchday date) so
+  // individual getFixtureResult calls for fd fixtures are all cache hits.
+  // api-sports fixtures still get individual calls (no bulk result endpoint).
+  if (fixtureIdToMeta.size > 0) {
+    const fdDates = new Set<string>()
+    for (const pred of predictions) {
+      for (const leg of (pred.legs as any[] || [])) {
+        if (leg.fixture_id && (leg.fixture_source === 'fd' || !leg.fixture_source) && leg.kickoff_at) {
+          fdDates.add((leg.kickoff_at as string).split('T')[0])
+        }
+      }
+    }
+    if (fdDates.size > 0) {
+      console.log(`[resolver] Pre-warming date cache for ${fdDates.size} matchday(s)`)
+      await prefetchMatchResults([...fdDates])
+    }
+  }
+
   const resultMap = new Map<number, Awaited<ReturnType<typeof getFixtureResult>>>()
   if (fixtureIdToMeta.size > 0) {
     console.log(`[resolver] Fetching ${fixtureIdToMeta.size} unique fixture result(s)`)
@@ -187,6 +205,19 @@ async function resolveSporbetPredictions(): Promise<void> {
   for (const pred of predictions) {
     try {
       const legs = pred.legs as any[]
+
+      // Empty legs array means slip data couldn't be parsed — treat as unresolvable
+      if (!legs.length) {
+        const hoursPast = (Date.now() - new Date(pred.event_start_time).getTime()) / 3_600_000
+        if (hoursPast > 12 && !pred.needs_review) {
+          await supabase.from('predictions').update({
+            needs_review: true,
+            review_note:  'Slip returned no leg data — manual resolution required',
+          }).eq('id', pred.id)
+          console.log(`[resolver] Flagged empty-legs prediction ${pred.id} for manual review`)
+        }
+        continue
+      }
 
       let anyLost    = false
       let anyPending = false
