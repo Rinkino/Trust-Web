@@ -59,7 +59,7 @@ const search = rateLimit({
 })
 
 app.use('/api', general)
-app.use('/api/predictions', lockPrediction)   // tighter limit stacked on top for POST
+app.post('/api/predictions', lockPrediction)
 app.use('/api/predictions/preview', preview)
 app.use('/api/users/search', search)
 
