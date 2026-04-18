@@ -196,20 +196,7 @@ export async function resolveLegsViaAI(
     console.log(`[ai-resolver] API lookup: ${leg.home_team} vs ${leg.away_team} → ${r.outcome} (${r.reasoning})`)
   }
 
-  // Step 2 — Groq fallback for anything still UNKNOWN
-  const stillUnknown = unresolvable.filter((_, i) => results[i].outcome === 'UNKNOWN')
-  if (stillUnknown.length && process.env.GROQ_API_KEY) {
-    console.log(`[ai-resolver] ${stillUnknown.length} leg(s) still UNKNOWN — trying Groq fallback`)
-    const groqResults = await resolveViaGroq(stillUnknown, eventStartDate)
-    if (groqResults) {
-      let gi = 0
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].outcome === 'UNKNOWN' && gi < groqResults.length) {
-          results[i] = groqResults[gi++]
-        }
-      }
-    }
-  }
+  // Groq fallback disabled — DuckDuckGo is blocked on Railway and burns token quota for nothing
 
   return results
 }
