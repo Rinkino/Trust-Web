@@ -865,7 +865,6 @@ export default function Admin() {
                       <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{p.resolution_source === 'ai' ? 'AI Reasoning' : 'Resolution Note'}</span>
                     </div>
                     {p.resolution_note.split(' | ').map((line: string, i: number) => {
-                      const arrowIdx = line.indexOf(' → ')
                       const match = line.match(/^(.+?)\s*\(([^)]+)\)\s*→\s*(WON|LOST|UNKNOWN)\.\s*(.*)$/)
                       if (match) {
                         const [, fixture, market, outcome, reasoning] = match
