@@ -21,6 +21,7 @@ export async function applyResolution(
   supabase: SupabaseClient,
   prediction: { id: string; user_id: string; odds: number },
   result: 'WON' | 'LOST' | 'VOID',
+  options?: { source?: 'auto' | 'ai' | 'manual'; note?: string },
 ): Promise<void> {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
@@ -55,6 +56,8 @@ export async function applyResolution(
       legs:               null,
       needs_review:       false,
       review_note:        null,
+      resolution_source:  options?.source ?? 'auto',
+      resolution_note:    options?.note   ?? null,
     })
     .eq('id', prediction.id)
 
@@ -273,10 +276,14 @@ export async function resolveSporbetPredictions(): Promise<void> {
             if (r.outcome !== 'WON')     { aiPending = true         }
           }
 
+          const aiNote = aiResults.map(r =>
+            `${r.home_team} vs ${r.away_team} (${r.market_type}:${r.market_value}) → ${r.outcome}. ${r.reasoning}`
+          ).join(' | ')
+
           if (aiLost) {
-            await applyResolution(supabase, pred, 'LOST')
+            await applyResolution(supabase, pred, 'LOST', { source: 'ai', note: aiNote })
           } else if (!aiPending) {
-            await applyResolution(supabase, pred, 'WON')
+            await applyResolution(supabase, pred, 'WON', { source: 'ai', note: aiNote })
           } else if (!pred.needs_review) {
             // AI returned UNKNOWN for at least one leg — genuine manual review needed
             await supabase.from('predictions').update({
