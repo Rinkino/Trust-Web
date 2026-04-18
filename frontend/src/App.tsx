@@ -18,6 +18,7 @@ import Admin from './pages/Admin'
 
 export default function App() {
   const [user, setUser]             = useState<User | null>(null)
+  const [username, setUsername]     = useState<string | null>(null)
   const [loading, setLoading]       = useState(true)
   const [notifCount, setNotifCount] = useState(0)
 
@@ -31,6 +32,11 @@ export default function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (!user) { setUsername(null); return }
+    api.getMe().then(p => setUsername(p?.username ?? null)).catch(() => {})
+  }, [user?.id])
 
   // Poll unread notification count
   useEffect(() => {
@@ -47,7 +53,7 @@ export default function App() {
     <ThemeProvider>
       <BrowserRouter>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <Navbar user={user} />
+          <Navbar user={user} username={username} />
           <div style={{ flex: 1 }}>
             <Routes>
               <Route path="/"              element={user ? <Navigate to="/home" replace /> : <Home />} />
