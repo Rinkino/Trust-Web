@@ -860,13 +860,32 @@ export default function Admin() {
                     background: 'var(--surface)', border: '1px solid var(--border)',
                     fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px', color: 'var(--accent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px', color: 'var(--accent)' }}>
                       <Bot size={12} strokeWidth={1.5} />
                       <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{p.resolution_source === 'ai' ? 'AI Reasoning' : 'Resolution Note'}</span>
                     </div>
-                    {p.resolution_note.split(' | ').map((line: string, i: number) => (
-                      <p key={i} style={{ margin: '0 0 4px' }}>{line}</p>
-                    ))}
+                    {p.resolution_note.split(' | ').map((line: string, i: number) => {
+                      const arrowIdx = line.indexOf(' → ')
+                      const match = line.match(/^(.+?)\s*\(([^)]+)\)\s*→\s*(WON|LOST|UNKNOWN)\.\s*(.*)$/)
+                      if (match) {
+                        const [, fixture, market, outcome, reasoning] = match
+                        const outcomeColor = outcome === 'WON' ? 'var(--success)' : outcome === 'LOST' ? 'var(--danger)' : 'var(--warning)'
+                        return (
+                          <div key={i} style={{
+                            padding: '8px 10px', borderRadius: '6px', marginBottom: '6px',
+                            background: 'var(--surface-2)', border: '1px solid var(--border)',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: reasoning ? '4px' : 0 }}>
+                              <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text)', flex: 1 }}>{fixture}</span>
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', padding: '1px 6px', background: 'var(--surface)', borderRadius: '4px', border: '1px solid var(--border)' }}>{market}</span>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: outcomeColor }}>{outcome}</span>
+                            </div>
+                            {reasoning && <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{reasoning}</p>}
+                          </div>
+                        )
+                      }
+                      return <p key={i} style={{ margin: '0 0 4px' }}>{line}</p>
+                    })}
                   </div>
                 )}
               </div>

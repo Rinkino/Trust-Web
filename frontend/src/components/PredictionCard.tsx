@@ -38,6 +38,8 @@ type Prediction = {
     correct_streak: number
     user_state: string
   }
+  needs_review?: boolean
+  review_note?: string
 }
 
 type Props = {
@@ -166,6 +168,25 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
           >
             {prediction.title}
           </p>
+
+          {/* Flagged banner */}
+          {prediction.needs_review && (
+            <div style={{
+              display: 'flex', gap: '8px', alignItems: 'flex-start',
+              padding: '8px 12px', borderRadius: '8px', marginBottom: '10px',
+              background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
+            }}>
+              <Clock size={13} strokeWidth={1.5} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: '1px' }} />
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--warning)' }}>Pending manual review</span>
+                {prediction.review_note && (
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.5 }}>
+                    {prediction.review_note}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Pills */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '10px' }}>
