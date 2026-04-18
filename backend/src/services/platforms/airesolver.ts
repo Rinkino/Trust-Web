@@ -2,35 +2,42 @@
  * AI-powered leg resolver
  *
  * For legs where fixture_id=null (league not covered by football-data.org or api-sports),
- * we ask a Groq LLM with web search to look up the match result directly.
+ * we ask a Groq LLM to look up the match result using DuckDuckGo search.
+ * No extra API keys needed beyond GROQ_API_KEY.
  *
  * Required env vars:
- *   GROQ_API_KEY   — Groq API key
- *   TAVILY_API_KEY — Tavily search API key (free tier: 1000 req/month)
+ *   GROQ_API_KEY — Groq API key
  */
 
 import Groq from 'groq-sdk'
+import * as cheerio from 'cheerio'
 import type { PredictionLeg } from './apisports'
 
 async function webSearch(query: string): Promise<string> {
-  if (!process.env.TAVILY_API_KEY) return 'Search unavailable — no TAVILY_API_KEY'
-
-  const res = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key:        process.env.TAVILY_API_KEY,
-      query,
-      search_depth:   'basic',
-      max_results:    5,
-      include_answer: true,
-    }),
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+  const res  = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
   })
 
   if (!res.ok) return `Search failed: ${res.status}`
-  const data = await res.json() as any
-  const snippets = (data.results || []).map((r: any) => `${r.title}: ${r.content}`).join('\n\n')
-  return data.answer ? `${data.answer}\n\n${snippets}` : snippets
+
+  const html = await res.text()
+  const $    = cheerio.load(html)
+
+  const snippets: string[] = []
+  $('.result__snippet').each((_, el) => {
+    const text = $(el).text().trim()
+    if (text) snippets.push(text)
+  })
+  $('.result__title').each((_, el) => {
+    const text = $(el).text().trim()
+    if (text) snippets.unshift(text)
+  })
+
+  return snippets.slice(0, 10).join('\n\n') || 'No results found'
 }
 
 type LegOutcome = 'WON' | 'LOST' | 'PENDING' | 'UNKNOWN'
