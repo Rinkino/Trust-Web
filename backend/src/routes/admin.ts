@@ -215,7 +215,13 @@ router.get('/users', adminGuard, async (req: Request, res: Response) => {
 
   const { data, error } = await query
   if (error) return res.status(500).json({ error: error.message })
-  res.json(data || [])
+
+  // Attach real email from auth.users
+  const { data: authList } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+  const emailMap = new Map((authList?.users ?? []).map(u => [u.id, u.email]))
+  const withEmail = (data || []).map(u => ({ ...u, email: emailMap.get(u.id) ?? null }))
+
+  res.json(withEmail)
 })
 
 // Activity timeline — last 50 events (new predictions + resolutions)
@@ -247,14 +253,15 @@ router.get('/activity', adminGuard, async (_req: Request, res: Response) => {
 router.get('/users/:userId', adminGuard, async (req: Request, res: Response) => {
   const { userId } = req.params
 
-  const [{ data: profile }, { data: predictions }, { data: history }] = await Promise.all([
+  const [{ data: profile }, { data: predictions }, { data: history }, { data: authUser }] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', userId).single(),
     supabase.from('predictions').select('*').eq('user_id', userId).order('locked_at', { ascending: false }),
     supabase.from('score_history').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+    supabase.auth.admin.getUserById(userId),
   ])
 
   if (!profile) return res.status(404).json({ error: 'User not found' })
-  res.json({ profile, predictions: predictions || [], score_history: history || [] })
+  res.json({ profile, email: authUser?.user?.email ?? null, predictions: predictions || [], score_history: history || [] })
 })
 
 // Resolution tickets — predictions flagged as unresolvable by the cron
@@ -390,7 +397,7 @@ router.post('/debug/run-resolver', adminGuard, async (_req: Request, res: Respon
 router.get('/ai-resolutions', adminGuard, async (_req: Request, res: Response) => {
   const { data, error } = await supabase
     .from('predictions')
-    .select('id, betslip_code, title, platform, status, odds, resolved_at, resolution_source, resolution_note, user_id')
+    .select('id, betslip_code, title, platform, status, odds, resolved_at, resolution_source, resolution_note, user_id, profiles(username)')
     .in('resolution_source', ['ai', 'auto'])
     .order('resolved_at', { ascending: false })
     .limit(100)

@@ -646,6 +646,9 @@ export default function Admin() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><TrendingUp size={10} strokeWidth={1.5} />{u.visibility_score?.toFixed(1)} vis</span>
                       {u.last_resolved_at && <span>{timeAgo(u.last_resolved_at)}</span>}
                     </div>
+                    {u.email && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-subtle)', marginTop: '2px', fontFamily: 'monospace' }}>{u.email}</div>
+                    )}
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: '14px', fontWeight: 800, color: u.credit_score >= 0 ? 'var(--accent-light)' : 'var(--danger)' }}>

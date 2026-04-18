@@ -38,6 +38,7 @@ export default function ProfilePage() {
   const [following, setFollowing]       = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [adminEmail, setAdminEmail]       = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -56,6 +57,16 @@ export default function ProfilePage() {
         ])
         setPredictions(preds)
         setFollowing(followStatus.following)
+
+        // If viewing as admin, fetch the real email
+        const adminCreds = (() => { try { return atob(sessionStorage.getItem('tw_admin_auth') || '') || null } catch { return null } })()
+        if (adminCreds) {
+          const ADMIN_API = import.meta.env.VITE_API_URL ?? ''
+          const r = await fetch(`${ADMIN_API}/api/x7k2-internal/users/${p.id}`, {
+            headers: { Authorization: `Basic ${btoa(adminCreds)}` },
+          }).then(res => res.ok ? res.json() : null).catch(() => null)
+          if (r?.email) setAdminEmail(r.email)
+        }
       })
       .catch(() => setError('User not found'))
       .finally(() => setLoading(false))
@@ -153,6 +164,11 @@ export default function ProfilePage() {
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Member since {memberSince}
                 </p>
+                {adminEmail && (
+                  <p style={{ fontSize: '11px', color: 'var(--text-subtle)', fontFamily: 'monospace', marginTop: '2px' }}>
+                    {adminEmail}
+                  </p>
+                )}
               </div>
               {/* Follow button — only show if viewing someone else's profile */}
               {currentUserId && profile.id !== currentUserId && (
