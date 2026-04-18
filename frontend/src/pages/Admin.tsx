@@ -810,7 +810,7 @@ export default function Admin() {
       {!loading && tab === 'ai' && (
         <div style={{ padding: '16px' }}>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            Predictions resolved by the AI agent via web search. Review the reasoning to verify accuracy.
+            All predictions resolved automatically — by match-score lookup (Auto) or AI web search (AI). Last 100 shown.
           </p>
           {aiResolutions.length === 0 && (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
@@ -839,6 +839,12 @@ export default function Admin() {
                       <span style={{ fontWeight: 700, fontSize: '13px', color: p.status === 'WON' ? 'var(--success)' : 'var(--danger)' }}>{p.status}</span>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '1px 7px', background: 'var(--surface)', borderRadius: '4px', border: '1px solid var(--border)' }}>{p.platform}</span>
                       <span style={{ fontSize: '11px', color: 'var(--accent-light)', fontWeight: 700 }}>×{p.odds}</span>
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em',
+                        background: p.resolution_source === 'ai' ? 'rgba(139,92,246,0.15)' : 'rgba(99,102,241,0.1)',
+                        color: p.resolution_source === 'ai' ? '#a78bfa' : 'var(--text-muted)',
+                        border: `1px solid ${p.resolution_source === 'ai' ? 'rgba(139,92,246,0.3)' : 'var(--border)'}`,
+                      }}>{p.resolution_source === 'ai' ? 'AI' : 'Auto'}</span>
                       <span style={{ fontSize: '11px', color: 'var(--text-subtle)', marginLeft: 'auto' }}>{p.resolved_at ? timeAgo(p.resolved_at) : ''}</span>
                     </div>
                     <p style={{ fontSize: '13px', color: 'var(--text)', marginBottom: '4px' }}>{p.title}</p>
@@ -853,7 +859,7 @@ export default function Admin() {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px', color: 'var(--accent)' }}>
                       <Bot size={12} strokeWidth={1.5} />
-                      <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Reasoning</span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{p.resolution_source === 'ai' ? 'AI Reasoning' : 'Resolution Note'}</span>
                     </div>
                     {p.resolution_note.split(' | ').map((line: string, i: number) => (
                       <p key={i} style={{ margin: '0 0 4px' }}>{line}</p>
