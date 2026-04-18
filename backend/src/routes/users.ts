@@ -176,7 +176,7 @@ router.patch('/me/username', authMiddleware, async (req: AuthRequest, res: Respo
 
   const { data, error } = await supabase
     .from('profiles')
-    .update({ username })
+    .update({ username, username_confirmed: true })
     .eq('id', req.userId)
     .select()
     .single()

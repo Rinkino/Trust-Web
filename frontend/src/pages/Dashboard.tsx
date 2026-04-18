@@ -52,7 +52,7 @@ type MarketPreview = {
 }
 
 type Profile = {
-  id: string; username: string; credit_score: number; visibility_score: number
+  id: string; username: string; username_confirmed: boolean; credit_score: number; visibility_score: number
   correct_streak: number; wrong_streak: number; best_streak_ever: number
   total_resolved: number; total_correct: number; user_state: string
 }
@@ -96,6 +96,11 @@ export default function Dashboard() {
   const [slipPreviewLoading, setSlipPreviewLoading] = useState(false)
   const [slipPreviewError, setSlipPreviewError] = useState('')
   const slipDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Username setup modal (shown when username_confirmed = false)
+  const [setupUsername, setSetupUsername]     = useState('')
+  const [setupError, setSetupError]           = useState('')
+  const [setupLoading, setSetupLoading]       = useState(false)
 
   // Settings fields
   const [newUsername, setNewUsername]         = useState('')
@@ -286,6 +291,23 @@ export default function Dashboard() {
     else { setSettingsMsg('Password updated.'); setNewPassword('') }
   }
 
+  async function handleSetupUsername(e: React.FormEvent) {
+    e.preventDefault()
+    setSetupError('')
+    const val = setupUsername.trim()
+    if (val.length < 3 || val.length > 30) { setSetupError('Must be 3–30 characters'); return }
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) { setSetupError('Letters, numbers, and underscores only'); return }
+    setSetupLoading(true)
+    try {
+      await api.updateUsername(val)
+      setSetupUsername('')
+      await loadData()
+    } catch (err: unknown) {
+      setSetupError(err instanceof Error ? err.message : String(err))
+    }
+    setSetupLoading(false)
+  }
+
   async function handleDeleteAccount() {
     if (confirmDelete !== profile?.username) {
       setSettingsErr(`Type your username "${profile?.username}" to confirm deletion`)
@@ -316,6 +338,40 @@ export default function Dashboard() {
 
   return (
     <div className="page">
+
+      {/* Username setup modal — shown on first login before user picks a display name */}
+      {profile && !profile.username_confirmed && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+        }}>
+          <div className="animate-fade-in-up" style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: '20px', padding: '32px', maxWidth: '380px', width: '100%',
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>Choose your username</h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.6 }}>
+              This is your public display name on TrustWeb. Pick something you're happy with — you can change it later.
+            </p>
+            <form onSubmit={handleSetupUsername} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <input
+                className="input"
+                placeholder="yourhandle"
+                value={setupUsername}
+                onChange={e => { setSetupUsername(e.target.value.toLowerCase().replace(/\s/g, '')); setSetupError('') }}
+                autoFocus
+                autoComplete="off"
+                style={{ fontSize: '16px' }}
+              />
+              {setupError && <p style={{ fontSize: '12px', color: 'var(--danger)', margin: 0 }}>{setupError}</p>}
+              <button type="submit" className="btn-accent" disabled={setupLoading} style={{ width: '100%' }}>
+                {setupLoading ? 'Saving…' : 'Set username'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Profile header */}
       <div className="animate-fade-in-up" style={{ marginBottom: '32px' }}>
