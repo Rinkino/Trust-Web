@@ -62,10 +62,11 @@ export type PredictionLeg = {
 // Caches (process-lifetime)
 // ---------------------------------------------------------------------------
 
-const fixtureCache   = new Map<string, FixtureResult>()    // "sport:id" → result (finished only)
-const dateCache      = new Map<string, any[]>()             // "YYYY-MM-DD" → football matches[]
-const searchCache    = new Map<string, number | null>()     // "sport:home|away|date" → id
-const asTeamCache    = new Map<string, number | null>()     // "sport:name" → team ID
+const fixtureCache   = new Map<string, FixtureResult>()                          // "sport:id" → result (finished only)
+const dateCache      = new Map<string, any[]>()                                   // "YYYY-MM-DD" → fd football matches[]
+const asDateCache    = new Map<string, any[]>()                                   // "YYYY-MM-DD" → as football fixtures[]
+const searchCache    = new Map<string, { id: number; source: 'fd' | 'as' } | null>() // "sport:home|away|date" → {id, source}
+const asTeamCache    = new Map<string, number | null>()                           // "sport:name" → team ID
 
 // ---------------------------------------------------------------------------
 // HTTP helpers
@@ -126,6 +127,23 @@ async function getFootballMatchesInWindow(date: string): Promise<any[]> {
   }
 }
 
+async function getAsFootballMatchesInWindow(date: string): Promise<any[]> {
+  if (asDateCache.has(date)) return asDateCache.get(date)!
+  if (!process.env.API_SPORTS_KEY) return []
+  try {
+    const d    = new Date(date)
+    const from = new Date(d.getTime() - 2 * 86400000).toISOString().split('T')[0]
+    const to   = new Date(d.getTime() + 2 * 86400000).toISOString().split('T')[0]
+    const data = await asFetch('football', `/fixtures?from=${from}&to=${to}`)
+    const fixtures = (data.response || []) as any[]
+    asDateCache.set(date, fixtures)
+    return fixtures
+  } catch (err) {
+    console.warn('[api-sports football] date window fetch error:', err)
+    return []
+  }
+}
+
 async function searchFootballFixture(
   homeTeam: string,
   awayTeam: string,
@@ -142,27 +160,16 @@ async function searchFootballFixture(
   }
 
   // --- Fallback: api-sports.io football (covers Europa/Conference/CONMEBOL/etc.) ---
-  if (!process.env.API_SPORTS_KEY) return null
-  try {
-    const homeId = await getAsTeamId('football', homeTeam)
-    if (!homeId) return null
-
-    const data     = await asFetch('football', `/fixtures?team=${homeId}&date=${date}`)
-    const fixtures = (data.response || []) as any[]
-
-    const match = fixtures.find((f: any) =>
-      fuzzyMatch(f.teams?.away?.name ?? '', awayTeam),
-    )
-    if (!match) return null
-
-    return {
-      fixtureId: match.fixture.id as number,
-      homeTeam:  match.teams.home.name as string,
-      awayTeam:  match.teams.away.name as string,
-    }
-  } catch (err) {
-    console.warn('[api-sports football] search error:', err)
-    return null
+  const fixtures = await getAsFootballMatchesInWindow(date)
+  const match = fixtures.find((f: any) =>
+    fuzzyMatch(f.teams?.home?.name ?? '', homeTeam) &&
+    fuzzyMatch(f.teams?.away?.name ?? '', awayTeam),
+  )
+  if (!match) return null
+  return {
+    fixtureId: match.fixture.id as number,
+    homeTeam:  match.teams.home.name as string,
+    awayTeam:  match.teams.away.name as string,
   }
 }
 
@@ -314,8 +321,8 @@ export async function searchFixture(
 ): Promise<{ fixtureId: number; homeTeam: string; awayTeam: string; source: 'fd' | 'as' } | null> {
   const cacheKey = `${sport}:${homeTeam.toLowerCase()}|${awayTeam.toLowerCase()}|${date}`
   if (searchCache.has(cacheKey)) {
-    const id = searchCache.get(cacheKey)
-    return id ? { fixtureId: id, homeTeam, awayTeam, source: 'fd' } : null
+    const cached = searchCache.get(cacheKey)
+    return cached ? { fixtureId: cached.id, homeTeam, awayTeam, source: cached.source } : null
   }
 
   let result: { fixtureId: number; homeTeam: string; awayTeam: string } | null = null
@@ -334,7 +341,7 @@ export async function searchFixture(
     result = await searchNonFootballFixture(sport, homeTeam, awayTeam, date)
   }
 
-  searchCache.set(cacheKey, result?.fixtureId ?? null)
+  searchCache.set(cacheKey, result ? { id: result.fixtureId, source } : null)
   return result ? { ...result, source } : null
 }
 
