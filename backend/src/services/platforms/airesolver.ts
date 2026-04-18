@@ -60,14 +60,15 @@ export async function resolveLegsViaAI(
 ): Promise<LegResolution[] | null> {
   if (!process.env.GROQ_API_KEY) return null
 
-  const unresolvable = legs.filter(l => !l.fixture_id && l.home_team && l.away_team && l.kickoff_at)
+  const unresolvable = legs.filter(l => !l.fixture_id && l.home_team && l.away_team)
   if (!unresolvable.length) return null
 
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-  const legsDescription = unresolvable.map((l, i) =>
-    `Leg ${i + 1}: ${l.home_team} vs ${l.away_team} on ${l.kickoff_at?.split('T')[0]} | market: ${l.market_type} | selection: ${l.market_value}`
-  ).join('\n')
+  const legsDescription = unresolvable.map((l, i) => {
+    const date = l.kickoff_at ? l.kickoff_at.split('T')[0] : 'recent'
+    return `Leg ${i + 1}: ${l.home_team} vs ${l.away_team} on ${date} | tournament: ${l.tournament ?? 'unknown'} | market: ${l.market_type} | selection: ${l.market_value}`
+  }).join('\n')
 
   const tools: Groq.Chat.ChatCompletionTool[] = [
     {
