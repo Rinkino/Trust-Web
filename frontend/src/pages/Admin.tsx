@@ -3,7 +3,7 @@ import {
   Users, BarChart2, Zap, Trophy, AlertTriangle,
   Clock, CheckCircle, XCircle, MinusCircle,
   TrendingUp, Flame, Search, RefreshCw, Activity,
-  Lock, Ticket, Wrench,
+  Lock, Ticket, Wrench, Bot,
 } from 'lucide-react'
 
 // ── Auth ────────────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ type Overview = {
   flagged_users: { count: number; reason: string; users: any[] }
 }
 
-type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets' | 'debug'
+type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets' | 'ai' | 'debug'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -176,8 +176,9 @@ export default function Admin() {
   const [wins, setWins]         = useState<any[]>([])
   const [users, setUsers]       = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
-  const [tickets, setTickets]   = useState<any[]>([])
-  const [debug, setDebug]       = useState<{ total: number; predictions: any[] } | null>(null)
+  const [tickets, setTickets]         = useState<any[]>([])
+  const [aiResolutions, setAiResolutions] = useState<any[]>([])
+  const [debug, setDebug]             = useState<{ total: number; predictions: any[] } | null>(null)
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [rebuildingId, setRebuildingId] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
@@ -193,6 +194,7 @@ export default function Admin() {
     if (t === 'users'    && users.length && !forceRefresh) return
     if (t === 'activity' && activity.length && !forceRefresh) return
     if (t === 'tickets'  && tickets.length && !forceRefresh) return
+    if (t === 'ai'       && aiResolutions.length && !forceRefresh) return
     if (t === 'debug'    && debug && !forceRefresh) return
 
     forceRefresh ? setRefreshing(true) : setLoading(true)
@@ -204,6 +206,7 @@ export default function Admin() {
       if (t === 'users')    setUsers(await adminFetch('/users', c))
       if (t === 'activity') setActivity(await adminFetch('/activity', c))
       if (t === 'tickets')  setTickets(await adminFetch('/tickets', c))
+      if (t === 'ai')       setAiResolutions((await adminFetch('/ai-resolutions', c)).predictions)
       if (t === 'debug')    setDebug(await adminFetch('/debug/pending', c))
     } catch (err: any) {
       if (err.message === 'bad_creds') { setCreds(null); sessionStorage.removeItem(ADMIN_KEY) }
@@ -269,8 +272,9 @@ export default function Admin() {
     { id: 'wins',      label: 'Big Wins',  icon: <Trophy size={15} strokeWidth={1.5} /> },
     { id: 'users',     label: 'Users',     icon: <Users size={15} strokeWidth={1.5} /> },
     { id: 'activity',  label: 'Activity',  icon: <Activity size={15} strokeWidth={1.5} /> },
-    { id: 'tickets',   label: `Tickets${tickets.length ? ` (${tickets.length})` : ''}`, icon: <Ticket size={15} strokeWidth={1.5} /> },
-    { id: 'debug',     label: `Debug${debug ? ` (${debug.total})` : ''}`,               icon: <Wrench size={15} strokeWidth={1.5} /> },
+    { id: 'tickets',   label: `Tickets${tickets.length ? ` (${tickets.length})` : ''}`,           icon: <Ticket size={15} strokeWidth={1.5} /> },
+    { id: 'ai',        label: `AI${aiResolutions.length ? ` (${aiResolutions.length})` : ''}`,   icon: <Bot size={15} strokeWidth={1.5} /> },
+    { id: 'debug',     label: `Debug${debug ? ` (${debug.total})` : ''}`,                         icon: <Wrench size={15} strokeWidth={1.5} /> },
   ]
 
   const filteredUsers = users.filter(u => !userSearch || u.username.toLowerCase().includes(userSearch.toLowerCase()))
@@ -762,6 +766,66 @@ export default function Admin() {
                 <p>No pending predictions.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── AI RESOLUTIONS ── */}
+      {!loading && tab === 'ai' && (
+        <div style={{ padding: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            Predictions resolved by the AI agent via web search. Review the reasoning to verify accuracy.
+          </p>
+          {aiResolutions.length === 0 && (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+              <Bot size={32} strokeWidth={1.5} style={{ marginBottom: '12px', opacity: 0.4 }} />
+              <p>No AI resolutions yet.</p>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {aiResolutions.map((p: any) => (
+              <div key={p.id} style={{
+                padding: '16px', borderRadius: '12px',
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: p.resolution_note ? '12px' : 0 }}>
+                  <div style={{
+                    width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                    background: p.status === 'WON' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                    border: `1px solid ${p.status === 'WON' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: p.status === 'WON' ? 'var(--success)' : 'var(--danger)',
+                  }}>
+                    {p.status === 'WON' ? <CheckCircle size={14} strokeWidth={2} /> : <XCircle size={14} strokeWidth={2} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, fontSize: '13px', color: p.status === 'WON' ? 'var(--success)' : 'var(--danger)' }}>{p.status}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '1px 7px', background: 'var(--surface)', borderRadius: '4px', border: '1px solid var(--border)' }}>{p.platform}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--accent-light)', fontWeight: 700 }}>×{p.odds}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-subtle)', marginLeft: 'auto' }}>{p.resolved_at ? timeAgo(p.resolved_at) : ''}</span>
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text)', marginBottom: '4px' }}>{p.title}</p>
+                    <span style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>#{p.betslip_code}</span>
+                  </div>
+                </div>
+                {p.resolution_note && (
+                  <div style={{
+                    padding: '10px 12px', borderRadius: '8px',
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '6px', color: 'var(--accent)' }}>
+                      <Bot size={12} strokeWidth={1.5} />
+                      <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Reasoning</span>
+                    </div>
+                    {p.resolution_note.split(' | ').map((line: string, i: number) => (
+                      <p key={i} style={{ margin: '0 0 4px' }}>{line}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
