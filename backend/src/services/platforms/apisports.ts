@@ -98,13 +98,68 @@ async function asFetch(sport: string, path: string): Promise<any> {
 // Normalisation
 // ---------------------------------------------------------------------------
 
+// Common abbreviations / short names → canonical fragments that appear in API names
+const TEAM_ALIASES: Record<string, string> = {
+  'psg':             'paris',
+  'man utd':         'manchester united',
+  'man united':      'manchester united',
+  'man city':        'manchester city',
+  'atletico madrid': 'atletico',
+  'atletico':        'atletico',
+  'inter milan':     'internazionale',
+  'inter':           'internazionale',
+  'ac milan':        'milan',
+  'istanbul bb':     'basaksehir',
+  'istanbul basaksehir': 'basaksehir',
+  'dynamo makhachkala':  'makhachkala',
+  'genclerbirligi':  'genclerbirligi',
+  'real oviedo':     'oviedo',
+  'celta':           'celta',
+  'alaves':          'alaves',
+  'betis':           'betis',
+  'rangers':         'rangers',
+  'burnley':         'burnley',
+  'southampton':     'southampton',
+  'pec zwolle':      'zwolle',
+  'psv eindhoven':   'psv',
+  'psv':             'psv',
+  'fc botosani':     'botosani',
+  'botosani':        'botosani',
+  'metaloglobus':    'metaloglobus',
+  'trabzonspor':     'trabzonspor',
+  'galatasaray':     'galatasaray',
+  'motherwell':      'motherwell',
+}
+
 function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
 function fuzzyMatch(apiName: string, searchName: string): boolean {
-  const a = norm(apiName), b = norm(searchName)
-  return a.includes(b) || b.includes(a)
+  const a = norm(apiName)
+  const bRaw = searchName.toLowerCase().trim()
+  const b = norm(bRaw)
+
+  // Direct inclusion
+  if (a.includes(b) || b.includes(a)) return true
+
+  // Alias expansion — map short/bookie name to a canonical fragment
+  const aliased = TEAM_ALIASES[bRaw] ?? TEAM_ALIASES[b]
+  if (aliased && a.includes(norm(aliased))) return true
+
+  // Acronym check — "PSG" matches "Paris Saint-Germain" (first letters of each word)
+  const apiWords = apiName.toLowerCase().split(/[\s\-_]+/).filter(w => w.length > 0)
+  const acronym  = norm(apiWords.map(w => w[0]).join(''))
+  if (b === acronym && b.length >= 2) return true
+
+  // Word-overlap — ≥60% of significant words in searchName appear somewhere in apiName
+  const searchWords = bRaw.split(/[\s\-_]+/).map(norm).filter(w => w.length >= 3)
+  if (searchWords.length > 0) {
+    const matched = searchWords.filter(sw => a.includes(sw))
+    if (matched.length >= Math.ceil(searchWords.length * 0.6)) return true
+  }
+
+  return false
 }
 
 // ---------------------------------------------------------------------------
