@@ -82,16 +82,33 @@ async function fdFetch(path: string): Promise<any> {
   return res.json()
 }
 
+function getApiSportsKeys(): string[] {
+  const keys: string[] = []
+  for (let i = 1; i <= 10; i++) {
+    const key = process.env[i === 1 ? 'API_SPORTS_KEY' : `API_SPORTS_KEY_${i}`]
+    if (key) keys.push(key)
+  }
+  return keys
+}
+
 async function asFetch(sport: string, path: string): Promise<any> {
-  const key  = process.env.API_SPORTS_KEY
+  const keys = getApiSportsKeys()
   const base = AS_BASES[sport]
-  if (!key)  throw new Error('API_SPORTS_KEY not set')
+  if (!keys.length) throw new Error('No API_SPORTS_KEY configured')
   if (!base) throw new Error(`No API-Sports base for sport: ${sport}`)
-  const res = await fetch(`${base}${path}`, {
-    headers: { 'x-apisports-key': key, 'Accept': 'application/json' },
-  })
-  if (!res.ok) throw new Error(`api-sports ${sport}${path} → ${res.status}`)
-  return res.json()
+
+  let lastError = ''
+  for (const key of keys) {
+    const res = await fetch(`${base}${path}`, {
+      headers: { 'x-apisports-key': key, 'Accept': 'application/json' },
+    })
+    if (!res.ok) { lastError = `${res.status}`; continue }
+    const data = await res.json()
+    // Skip suspended/over-quota keys
+    if (data.errors?.access || data.errors?.requests) { lastError = JSON.stringify(data.errors); continue }
+    return data
+  }
+  throw new Error(`api-sports ${sport}${path} — all keys failed: ${lastError}`)
 }
 
 // ---------------------------------------------------------------------------
