@@ -31,7 +31,7 @@ type Overview = {
   flagged_users: { count: number; reason: string; users: any[] }
 }
 
-type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets' | 'ai' | 'debug'
+type Tab = 'overview' | 'live' | 'wins' | 'users' | 'activity' | 'tickets' | 'ai' | 'debug' | 'unknown'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -179,6 +179,7 @@ export default function Admin() {
   const [tickets, setTickets]         = useState<any[]>([])
   const [aiResolutions, setAiResolutions] = useState<any[]>([])
   const [debug, setDebug]             = useState<{ total: number; predictions: any[] } | null>(null)
+  const [unknownMarkets, setUnknownMarkets] = useState<{ total: number; predictions: any[] } | null>(null)
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [rebuildingId, setRebuildingId] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
@@ -196,6 +197,7 @@ export default function Admin() {
     if (t === 'tickets'  && tickets.length && !forceRefresh) return
     if (t === 'ai'       && aiResolutions.length && !forceRefresh) return
     if (t === 'debug'    && debug && !forceRefresh) return
+    if (t === 'unknown'  && unknownMarkets && !forceRefresh) return
 
     forceRefresh ? setRefreshing(true) : setLoading(true)
     setError('')
@@ -208,13 +210,14 @@ export default function Admin() {
       if (t === 'tickets')  setTickets(await adminFetch('/tickets', c))
       if (t === 'ai')       setAiResolutions((await adminFetch('/ai-resolutions', c)).predictions)
       if (t === 'debug')    setDebug(await adminFetch('/debug/pending', c))
+      if (t === 'unknown')  setUnknownMarkets(await adminFetch('/debug/unknown-markets', c))
     } catch (err: any) {
       if (err.message === 'bad_creds') { setCreds(null); sessionStorage.removeItem(ADMIN_KEY) }
       else setError(err.message)
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [overview, live, wins, users, activity, tickets])
+  }, [overview, live, wins, users, activity, tickets, aiResolutions, debug, unknownMarkets])
 
   async function resolveTicket(id: string, result: 'WON' | 'LOST' | 'VOID') {
     if (!creds) return
@@ -289,6 +292,7 @@ export default function Admin() {
     { id: 'activity',  label: 'Activity',  icon: <Activity size={15} strokeWidth={1.5} /> },
     { id: 'tickets',   label: `Tickets${tickets.length ? ` (${tickets.length})` : ''}`,           icon: <Ticket size={15} strokeWidth={1.5} /> },
     { id: 'ai',        label: `AI${aiResolutions.length ? ` (${aiResolutions.length})` : ''}`,   icon: <Bot size={15} strokeWidth={1.5} /> },
+    { id: 'unknown',   label: `Unknown Markets${unknownMarkets?.total ? ` (${unknownMarkets.total})` : ''}`, icon: <AlertTriangle size={15} strokeWidth={1.5} /> },
     { id: 'debug',     label: `Debug${debug ? ` (${debug.total})` : ''}`,                         icon: <Wrench size={15} strokeWidth={1.5} /> },
   ]
 
@@ -806,6 +810,47 @@ export default function Admin() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── UNKNOWN MARKETS ── */}
+      {!loading && tab === 'unknown' && (
+        <div style={{ padding: '16px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            PENDING predictions with legs the parser couldn't recognise. The raw market string is shown so you can add support or resolve manually.
+          </p>
+          {!unknownMarkets || unknownMarkets.total === 0 ? (
+            <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '40px' }}>No unknown markets — everything parsed correctly.</p>
+          ) : (unknownMarkets.predictions || []).map((pred: any) => (
+            <div key={pred.id} style={{ background: 'var(--card)', borderRadius: '10px', padding: '14px', marginBottom: '12px', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: '14px' }}>{pred.title || pred.betslip_code}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '8px' }}>{pred.platform} · @{pred.user}</span>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(pred.event_start_time).toLocaleDateString()}</span>
+              </div>
+              {(pred.unknown_legs || []).map((leg: any, i: number) => (
+                <div key={i} style={{ background: 'var(--bg)', borderRadius: '6px', padding: '8px 10px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px' }}>{leg.match}</span>
+                  <span style={{
+                    fontSize: '11px', fontFamily: 'monospace',
+                    background: '#f59e0b22', color: '#f59e0b',
+                    padding: '2px 8px', borderRadius: '4px',
+                  }}>{leg.raw_market}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                {(['WON', 'LOST', 'VOID'] as const).map(r => (
+                  <button key={r} onClick={() => resolveTicket(pred.id, r)} disabled={!!resolvingId} style={{
+                    padding: '4px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                    background: r === 'WON' ? '#22c55e22' : r === 'LOST' ? '#ef444422' : '#6b728022',
+                    color:      r === 'WON' ? '#22c55e'   : r === 'LOST' ? '#ef4444'   : 'var(--text-muted)',
+                  }}>{r}</button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
