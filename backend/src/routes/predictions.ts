@@ -149,6 +149,13 @@ router.post('/', authMiddleware, submitLimiter, async (req: AuthRequest, res: Re
     }
   }
 
+  // resolve_after = latest leg kickoff + 2.5h, or event_start + 3h if no kickoff data
+  const latestKickoffMs = (legs ?? []).reduce((max: number, l: any) => {
+    if (!l.kickoff_at) return max
+    return Math.max(max, new Date(l.kickoff_at).getTime())
+  }, eventStart.getTime())
+  const resolveAfter = new Date(latestKickoffMs + 2.5 * 60 * 60 * 1000).toISOString()
+
   const { data, error } = await supabase
     .from('predictions')
     .insert({
@@ -161,6 +168,7 @@ router.post('/', authMiddleware, submitLimiter, async (req: AuthRequest, res: Re
       event_start_time: eventStart.toISOString(),
       status:           'PENDING',
       locked_at:        new Date().toISOString(),
+      resolve_after:    resolveAfter,
       market_id:        market_id || null,
       selection:        selection || null,
       legs:             legs,
