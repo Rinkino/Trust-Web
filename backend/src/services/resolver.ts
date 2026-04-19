@@ -150,12 +150,14 @@ export async function resolvePolymarketPredictions(): Promise<void> {
 export async function resolveSporbetPredictions(): Promise<void> {
   const supabase = getSupabase()
 
+  const now = new Date().toISOString()
   const { data: predictions, error } = await supabase
     .from('predictions')
     .select('id, user_id, odds, legs, event_start_time, needs_review, betslip_code, platform')
     .eq('status', 'PENDING')
     .eq('platform', 'Sportybet')
     .not('legs', 'is', null)
+    .or(`resolve_after.is.null,resolve_after.lte.${now}`)
 
   if (error) {
     console.error('[resolver] Sportybet fetch error:', error.message)
@@ -266,14 +268,6 @@ export async function resolveSporbetPredictions(): Promise<void> {
       } else if (!anyPending) {
         await applyResolution(supabase, pred, 'WON', { source: 'auto', note: autoNote })
       } else if (anyUnresolvable) {
-        const latestKickoffMs = legs.reduce((latest: number, leg: any) => {
-          if (!leg.kickoff_at) return latest
-          return Math.max(latest, new Date(leg.kickoff_at).getTime())
-        }, new Date(pred.event_start_time).getTime())
-
-        const hoursPastLatest = (Date.now() - latestKickoffMs) / 3_600_000
-        if (hoursPastLatest <= 3) continue
-
         // If legs have fixture_id but no market_type, the parser failed at lock time.
         // Re-fetch the slip so the (now improved) parser can re-attempt normalisation.
         const hasUnknownMarket = legs.some((l: any) => l.fixture_id && !l.market_type)
@@ -372,13 +366,12 @@ export function startResolutionCron(): void {
     })
   })
 
-  // Sportybet — every 10 minutes
-  // Runs against API-Sports; no browser needed
-  cron.schedule('*/10 * * * *', () => {
+  // Sportybet — every minute, but query only picks up predictions past their resolve_after time
+  cron.schedule('* * * * *', () => {
     resolveSporbetPredictions().catch(err => {
       console.error('[resolver] Sportybet cron error:', err)
     })
   })
 
-  console.log('[resolver] Resolution cron started — Polymarket every 5min, Sportybet every 10min')
+  console.log('[resolver] Resolution cron started — Polymarket every 5min, Sportybet every 1min (event-driven via resolve_after)')
 }
