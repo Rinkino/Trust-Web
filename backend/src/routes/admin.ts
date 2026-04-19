@@ -325,6 +325,83 @@ router.post('/debug/rebuild-legs/:id', adminGuard, async (req: Request, res: Res
   }
 })
 
+// Override an already-resolved prediction (e.g. wrongly auto-resolved)
+// Reverses old credit delta, applies correct result
+router.patch('/predictions/:id/override', adminGuard, async (req: Request, res: Response) => {
+  const { id }     = req.params
+  const { result } = req.body
+
+  if (!['WON', 'LOST', 'VOID'].includes(result)) {
+    return res.status(400).json({ error: 'result must be WON, LOST, or VOID' })
+  }
+
+  const { data: pred } = await supabase
+    .from('predictions')
+    .select('id, user_id, odds, status, score_contribution')
+    .eq('id', id)
+    .neq('status', 'PENDING')
+    .single()
+
+  if (!pred) return res.status(404).json({ error: 'Resolved prediction not found' })
+  if (pred.status === result) return res.status(400).json({ error: `Already ${result}` })
+
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', pred.user_id).single()
+  if (!profile) return res.status(404).json({ error: 'User not found' })
+
+  try {
+    const oldDelta = pred.score_contribution ?? 0
+
+    // Reverse old contribution then apply correct result
+    const adjusted = { ...profile, credit_score: Math.max(0, Math.min(100, profile.credit_score - oldDelta)) }
+    const { calculateScoreUpdate } = await import('../services/scoring')
+    const scoring = calculateScoreUpdate(result, pred.odds, {
+      currentCreditScore:     adjusted.credit_score,
+      currentVisibilityScore: profile.visibility_score,
+      totalResolved:          profile.total_resolved,
+      correctStreak:          profile.correct_streak,
+      wrongStreak:            profile.wrong_streak,
+      bestStreakEver:         profile.best_streak_ever,
+      daysInactive:           profile.days_inactive,
+    })
+
+    const now = new Date().toISOString()
+    await supabase.from('predictions').update({
+      status:             result,
+      resolved_at:        now,
+      score_contribution: scoring.creditDelta,
+      resolution_source:  'manual',
+      resolution_note:    `Admin override: ${pred.status} → ${result}`,
+    }).eq('id', id)
+
+    await supabase.from('profiles').update({
+      credit_score:     scoring.newCreditScore,
+      visibility_score: scoring.newVisibilityScore,
+      correct_streak:   scoring.newCorrectStreak,
+      wrong_streak:     scoring.newWrongStreak,
+      total_correct:    result === 'WON' && pred.status !== 'WON' ? profile.total_correct + 1
+                      : result !== 'WON' && pred.status === 'WON' ? Math.max(0, profile.total_correct - 1)
+                      : profile.total_correct,
+    }).eq('id', pred.user_id)
+
+    await supabase.from('score_history').insert({
+      user_id:           pred.user_id,
+      prediction_id:     pred.id,
+      credit_before:     adjusted.credit_score,
+      credit_after:      scoring.newCreditScore,
+      credit_delta:      scoring.creditDelta,
+      visibility_before: profile.visibility_score,
+      visibility_after:  scoring.newVisibilityScore,
+      visibility_delta:  scoring.visibilityDelta,
+      result,
+    })
+
+    res.json({ ok: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(500).json({ error: msg })
+  }
+})
+
 // Admin manually resolves a ticket
 router.patch('/tickets/:id/resolve', adminGuard, async (req: Request, res: Response) => {
   const { id }     = req.params
