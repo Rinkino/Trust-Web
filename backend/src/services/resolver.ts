@@ -1,8 +1,9 @@
 import cron from 'node-cron'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { fetchPolymarketMarketById } from './platforms/polymarket'
-import { getFixtureResult, determineOutcome, prefetchMatchResults } from './platforms/apisports'
+import { getFixtureResult, determineOutcome, prefetchMatchResults, buildLegsFromSlip } from './platforms/apisports'
 import { resolveLegsViaAI } from './platforms/airesolver'
+import { retrieveSlip } from './platforms/convertbetcodes'
 import { calculateScoreUpdate, ScoringContext } from './scoring'
 
 function getSupabase(): SupabaseClient {
@@ -151,7 +152,7 @@ export async function resolveSporbetPredictions(): Promise<void> {
 
   const { data: predictions, error } = await supabase
     .from('predictions')
-    .select('id, user_id, odds, legs, event_start_time, needs_review')
+    .select('id, user_id, odds, legs, event_start_time, needs_review, betslip_code, platform')
     .eq('status', 'PENDING')
     .eq('platform', 'Sportybet')
     .not('legs', 'is', null)
@@ -265,14 +266,30 @@ export async function resolveSporbetPredictions(): Promise<void> {
       } else if (!anyPending) {
         await applyResolution(supabase, pred, 'WON', { source: 'auto', note: autoNote })
       } else if (anyUnresolvable) {
-        // At least one leg has no fixture_id — try AI web search before giving up
         const latestKickoffMs = legs.reduce((latest: number, leg: any) => {
           if (!leg.kickoff_at) return latest
           return Math.max(latest, new Date(leg.kickoff_at).getTime())
         }, new Date(pred.event_start_time).getTime())
 
         const hoursPastLatest = (Date.now() - latestKickoffMs) / 3_600_000
-        if (hoursPastLatest <= 3) continue  // too early to resolve
+        if (hoursPastLatest <= 3) continue
+
+        // If legs have fixture_id but no market_type, the parser failed at lock time.
+        // Re-fetch the slip so the (now improved) parser can re-attempt normalisation.
+        const hasUnknownMarket = legs.some((l: any) => l.fixture_id && !l.market_type)
+        if (hasUnknownMarket) {
+          try {
+            console.log(`[resolver] Rebuilding legs for ${pred.id} (unknown market type)`)
+            const bookie = pred.platform?.toLowerCase().includes(':') ? pred.platform.toLowerCase() : 'sportybet:ng'
+            const slip   = await retrieveSlip(pred.betslip_code, bookie)
+            const rebuilt = await buildLegsFromSlip(slip.legs, pred.event_start_time)
+            await supabase.from('predictions').update({ legs: rebuilt, needs_review: false, review_note: null }).eq('id', pred.id)
+            console.log(`[resolver] Rebuilt legs for ${pred.id} — will re-evaluate next cycle`)
+          } catch (err) {
+            console.warn(`[resolver] Rebuild failed for ${pred.id}:`, err)
+          }
+          continue  // let the next cron cycle evaluate with fresh legs
+        }
 
         console.log(`[resolver] Attempting AI resolution for ${pred.id}`)
         const aiResults = await resolveLegsViaAI(legs, pred.event_start_time)
