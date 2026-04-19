@@ -237,6 +237,21 @@ export default function Admin() {
     }
   }
 
+  async function overrideResolution(id: string, result: 'WON' | 'LOST' | 'VOID') {
+    if (!creds) return
+    setResolvingId(id)
+    try {
+      const res = await fetch(`${ADMIN_API}/api/x7k2-internal/predictions/${id}/override`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Basic ${btoa(creds)}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result }),
+      })
+      if (res.ok) setAiResolutions(prev => prev.map(p => p.id === id ? { ...p, status: result, resolution_source: 'manual' } : p))
+    } finally {
+      setResolvingId(null)
+    }
+  }
+
   async function resolveDebugTicket(id: string, result: 'WON' | 'LOST' | 'VOID') {
     if (!creds) return
     setResolvingId(id)
@@ -932,6 +947,19 @@ export default function Admin() {
                     })}
                   </div>
                 )}
+                <div style={{ display: 'flex', gap: '6px', marginTop: '10px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginRight: '4px' }}>Override:</span>
+                  {(['WON', 'LOST', 'VOID'] as const).map(r => (
+                    <button key={r} onClick={() => overrideResolution(p.id, r)}
+                      disabled={!!resolvingId || p.status === r}
+                      style={{
+                        padding: '3px 10px', borderRadius: '5px', border: 'none', cursor: p.status === r ? 'default' : 'pointer',
+                        fontSize: '11px', fontWeight: 600, opacity: p.status === r ? 0.35 : 1,
+                        background: r === 'WON' ? '#22c55e22' : r === 'LOST' ? '#ef444422' : '#6b728022',
+                        color:      r === 'WON' ? '#22c55e'   : r === 'LOST' ? '#ef4444'   : 'var(--text-muted)',
+                      }}>{r}</button>
+                  ))}
+                </div>
               </div>
             ))}
           </div>

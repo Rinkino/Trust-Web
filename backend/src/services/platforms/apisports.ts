@@ -532,6 +532,11 @@ export function determineOutcome(
     if (mv === 'away') return awayScore > homeScore ? 'WON' : 'LOST'
   }
 
+  if (mt === 'stats_over_under') {
+    // Corners/cards/shots — no stats data available from results API
+    return 'PENDING'
+  }
+
   if (mt === 'half_time_1x2') {
     const ht = result.homeScoreHT
     const at = result.awayScoreHT
@@ -617,13 +622,23 @@ function normalizeMarket(
     return { marketType: 'btts', marketValue: s.includes('yes') ? 'yes' : 'no' }
   }
 
-  // Over/Under — line may appear in market text (e.g. "Total Goals Over 2.5") or selection
+  // Non-goals over/under markets — we don't have the data to auto-resolve these
+  if (
+    m.includes('corner') || m.includes('card') || m.includes('yellow') ||
+    m.includes('red card') || m.includes('shot') || m.includes('foul') ||
+    m.includes('offside') || m.includes('throw') || m.includes('booking')
+  ) {
+    const ou = combined.match(/(over|under)\s*([\d.]+)/i)
+    if (ou) return { marketType: 'stats_over_under', marketValue: `${ou[1].toLowerCase()}_${ou[2]}` }
+    return null
+  }
+
+  // Goals over/under — line may appear in market text (e.g. "Total Goals Over 2.5") or selection
   if (
     m.includes('over') || m.includes('under') ||
     m.includes('total goals') || m.includes('total points') ||
     m.includes('total runs')
   ) {
-    // Try selection first, then combined
     const ou = combined.match(/(over|under)\s*([\d.]+)/i)
     if (!ou) return null
     return { marketType: 'over_under', marketValue: `${ou[1].toLowerCase()}_${ou[2]}` }
