@@ -236,9 +236,12 @@ export async function resolveSporbetPredictions(): Promise<void> {
         if (!leg.fixture_id || !leg.market_type || !leg.market_value) {
           anyUnresolvable = true
           anyPending      = true
-          legSummaries.push(`${label} → NO_FIXTURE_ID`)
+          const reason = !leg.fixture_id ? 'NO_FIXTURE_ID' : 'UNKNOWN_MARKET'
+          legSummaries.push(`${label} → ${reason}`)
           continue
         }
+
+
 
         const fixtureResult = resultMap.get(leg.fixture_id as number)
         if (!fixtureResult) {

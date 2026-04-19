@@ -386,6 +386,26 @@ router.post('/debug/run-resolver', adminGuard, async (_req: Request, res: Respon
   }
 })
 
+// Unknown markets — PENDING predictions with legs that couldn't be parsed
+router.get('/debug/unknown-markets', adminGuard, async (_req: Request, res: Response) => {
+  const { data, error } = await supabase
+    .from('predictions')
+    .select('id, title, betslip_code, platform, event_start_time, legs, profiles(username)')
+    .eq('status', 'PENDING')
+    .not('legs', 'is', null)
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  const flagged = (data || []).flatMap(pred => {
+    const legs = Array.isArray(pred.legs) ? pred.legs as any[] : []
+    const badLegs = legs.filter(l => !l.market_type && l.raw_market)
+    if (!badLegs.length) return []
+    return [{ id: pred.id, title: pred.title, betslip_code: pred.betslip_code, platform: pred.platform, event_start_time: pred.event_start_time, user: (pred.profiles as any)?.username, unknown_legs: badLegs.map(l => ({ match: `${l.home_team} vs ${l.away_team}`, raw_market: l.raw_market })) }]
+  })
+
+  res.json({ total: flagged.length, predictions: flagged })
+})
+
 router.get('/ai-resolutions', adminGuard, async (_req: Request, res: Response) => {
   const { data, error } = await supabase
     .from('predictions')

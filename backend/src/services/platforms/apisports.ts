@@ -37,23 +37,26 @@ const AS_BASES: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 export type FixtureResult = {
-  fixtureId:  number
-  homeTeam:   string
-  awayTeam:   string
-  homeScore:  number
-  awayScore:  number
-  finished:   boolean
+  fixtureId:     number
+  homeTeam:      string
+  awayTeam:      string
+  homeScore:     number
+  awayScore:     number
+  homeScoreHT:   number | null
+  awayScoreHT:   number | null
+  finished:      boolean
 }
 
 export type PredictionLeg = {
   fixture_id:     number | null
-  fixture_source: 'fd' | 'as' | null   // 'fd' = football-data.org, 'as' = api-sports.io
+  fixture_source: 'fd' | 'as' | null
   sport:          string
   home_team:      string
   away_team:      string
   kickoff_at:     string | null
-  market_type:    string | null   // '1x2' | 'btts' | 'over_under'
-  market_value:   string | null   // 'home'|'draw'|'away'|'yes'|'no'|'over_2.5' etc
+  market_type:    string | null
+  market_value:   string | null
+  raw_market:     string | null   // stored when normalizeMarket fails — visible in admin
   tournament:     string
   odds:           number
 }
@@ -256,10 +259,12 @@ async function getFootballResult(fixtureId: number, source: 'fd' | 'as' = 'fd'):
       const finished = ['FT', 'AET', 'PEN', 'AWD', 'WO'].includes(fixture.fixture?.status?.short ?? '')
       return {
         fixtureId,
-        homeTeam:  fixture.teams?.home?.name ?? '',
-        awayTeam:  fixture.teams?.away?.name ?? '',
-        homeScore: fixture.goals?.home ?? 0,
-        awayScore: fixture.goals?.away ?? 0,
+        homeTeam:    fixture.teams?.home?.name ?? '',
+        awayTeam:    fixture.teams?.away?.name ?? '',
+        homeScore:   fixture.goals?.home ?? 0,
+        awayScore:   fixture.goals?.away ?? 0,
+        homeScoreHT: fixture.score?.halftime?.home ?? null,
+        awayScoreHT: fixture.score?.halftime?.away ?? null,
         finished,
       }
     } catch (err) {
@@ -275,10 +280,12 @@ async function getFootballResult(fixtureId: number, source: 'fd' | 'as' = 'fd'):
       const finished = m.status === 'FINISHED'
       return {
         fixtureId,
-        homeTeam:  m.homeTeam?.name  ?? '',
-        awayTeam:  m.awayTeam?.name  ?? '',
-        homeScore: m.score?.fullTime?.home ?? 0,
-        awayScore: m.score?.fullTime?.away ?? 0,
+        homeTeam:    m.homeTeam?.name  ?? '',
+        awayTeam:    m.awayTeam?.name  ?? '',
+        homeScore:   m.score?.fullTime?.home  ?? 0,
+        awayScore:   m.score?.fullTime?.away  ?? 0,
+        homeScoreHT: m.score?.halfTime?.home  ?? null,
+        awayScoreHT: m.score?.halfTime?.away  ?? null,
         finished,
       }
     }
@@ -291,10 +298,12 @@ async function getFootballResult(fixtureId: number, source: 'fd' | 'as' = 'fd'):
     const finished = data.status === 'FINISHED'
     return {
       fixtureId,
-      homeTeam:  data.homeTeam?.name  ?? '',
-      awayTeam:  data.awayTeam?.name  ?? '',
-      homeScore: data.score?.fullTime?.home ?? 0,
-      awayScore: data.score?.fullTime?.away ?? 0,
+      homeTeam:    data.homeTeam?.name  ?? '',
+      awayTeam:    data.awayTeam?.name  ?? '',
+      homeScore:   data.score?.fullTime?.home  ?? 0,
+      awayScore:   data.score?.fullTime?.away  ?? 0,
+      homeScoreHT: data.score?.halfTime?.home  ?? null,
+      awayScoreHT: data.score?.halfTime?.away  ?? null,
       finished,
     }
   } catch (err) {
@@ -381,10 +390,12 @@ async function getNonFootballResult(sport: string, fixtureId: number): Promise<F
 
     return {
       fixtureId,
-      homeTeam:  game.teams?.home?.name ?? '',
-      awayTeam:  game.teams?.away?.name ?? '',
+      homeTeam:    game.teams?.home?.name ?? '',
+      awayTeam:    game.teams?.away?.name ?? '',
       homeScore,
       awayScore,
+      homeScoreHT: null,
+      awayScoreHT: null,
       finished,
     }
   } catch (err) {
@@ -506,6 +517,36 @@ export function determineOutcome(
       : total < threshold ? 'WON' : 'LOST'
   }
 
+  if (mt === 'double_chance') {
+    const home = homeScore > awayScore
+    const draw = homeScore === awayScore
+    const away = awayScore > homeScore
+    if (mv === '1x') return (home || draw) ? 'WON' : 'LOST'
+    if (mv === 'x2') return (draw || away) ? 'WON' : 'LOST'
+    if (mv === '12') return (home || away) ? 'WON' : 'LOST'
+  }
+
+  if (mt === 'dnb') {
+    if (homeScore === awayScore) return 'PENDING' // void/push — treat as pending for now
+    if (mv === 'home') return homeScore > awayScore ? 'WON' : 'LOST'
+    if (mv === 'away') return awayScore > homeScore ? 'WON' : 'LOST'
+  }
+
+  if (mt === 'half_time_1x2') {
+    const ht = result.homeScoreHT
+    const at = result.awayScoreHT
+    if (ht === null || at === null) return 'PENDING'
+    if (mv === 'home') return ht > at  ? 'WON' : 'LOST'
+    if (mv === 'draw') return ht === at ? 'WON' : 'LOST'
+    if (mv === 'away') return at > ht  ? 'WON' : 'LOST'
+  }
+
+  if (mt === 'odd_even') {
+    const odd = total % 2 !== 0
+    if (mv === 'odd')  return odd  ? 'WON' : 'LOST'
+    if (mv === 'even') return !odd ? 'WON' : 'LOST'
+  }
+
   return 'PENDING'
 }
 
@@ -553,7 +594,10 @@ function normalizeMarket(
 ): { marketType: string; marketValue: string } | null {
   const m = market.toLowerCase()
   const s = selection.toLowerCase().trim()
+  // combined string for picking up values that may appear in either field
+  const combined = `${m} ${s}`
 
+  // 1X2 / match result
   if (
     m.includes('full time') || m.includes('1x2') ||
     m.includes('match result') || m === 'result' ||
@@ -568,18 +612,53 @@ function normalizeMarket(
     return { marketType: '1x2', marketValue: value }
   }
 
+  // BTTS
   if (m.includes('both teams') || m.includes('btts') || m.includes('both to score')) {
     return { marketType: 'btts', marketValue: s.includes('yes') ? 'yes' : 'no' }
   }
 
+  // Over/Under — line may appear in market text (e.g. "Total Goals Over 2.5") or selection
   if (
     m.includes('over') || m.includes('under') ||
-    m.includes('goals over') || m.includes('total points') ||
-    m.includes('total runs') || m.includes('total goals')
+    m.includes('total goals') || m.includes('total points') ||
+    m.includes('total runs')
   ) {
-    const ou = s.match(/(over|under)\s*([\d.]+)/i)
+    // Try selection first, then combined
+    const ou = combined.match(/(over|under)\s*([\d.]+)/i)
     if (!ou) return null
     return { marketType: 'over_under', marketValue: `${ou[1].toLowerCase()}_${ou[2]}` }
+  }
+
+  // Double Chance
+  if (m.includes('double chance')) {
+    const dc = s.replace(/\s+/g, '').toUpperCase()
+    const value = dc === '1X' ? '1X' : dc === 'X2' ? 'X2' : dc === '12' ? '12' : null
+    if (!value) return null
+    return { marketType: 'double_chance', marketValue: value }
+  }
+
+  // Draw No Bet
+  if (m.includes('draw no bet') || m.includes('dnb')) {
+    const value = s.includes('1') || s.includes('home') ? 'home'
+                : s.includes('2') || s.includes('away') ? 'away'
+                : null
+    if (!value) return null
+    return { marketType: 'dnb', marketValue: value }
+  }
+
+  // Half Time result (1x2 logic, tagged separately so resolver can skip if needed)
+  if (m.includes('half time') || m.includes('1st half') || m.includes('first half')) {
+    const value = (s === '1' || s === 'home') ? 'home'
+                : (s === 'x' || s === 'draw') ? 'draw'
+                : (s === '2' || s === 'away') ? 'away'
+                : null
+    if (!value) return null
+    return { marketType: 'half_time_1x2', marketValue: value }
+  }
+
+  // Odd/Even goals
+  if (m.includes('odd/even') || m.includes('odd or even')) {
+    return { marketType: 'odd_even', marketValue: s.includes('odd') ? 'odd' : 'even' }
   }
 
   return null
@@ -664,6 +743,7 @@ export async function buildLegsFromSlip(
       kickoff_at:   kickoffAt?.toISOString() ?? null,
       market_type:  normalized?.marketType  ?? null,
       market_value: normalized?.marketValue ?? null,
+      raw_market:   normalized ? null : `${raw.market} | ${raw.selection}`,
       tournament,
       odds:         raw.odds,
     })
