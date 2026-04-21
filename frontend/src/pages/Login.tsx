@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Lock, ShieldCheck, TrendingUp, Shield, Mail, Eye, EyeOff } from 'lucide-react'
+import { Lock, ShieldCheck, TrendingUp, Mail, Eye, EyeOff } from 'lucide-react'
 
 type AuthMode = 'signin' | 'signup' | 'forgot'
 
@@ -86,12 +86,19 @@ export default function Login() {
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <div style={{
-              width: '56px', height: '56px', margin: '0 auto 16px',
+              width: '64px', height: '64px', margin: '0 auto 16px',
               background: 'var(--accent)',
-              borderRadius: '14px',
+              borderRadius: '16px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 24px rgba(var(--accent-rgb),0.4)',
             }}>
-              <Shield size={24} strokeWidth={1.5} color="#fff" />
+              <img
+                src="/dragon-head-evil-legend-myth-svgrepo-com.svg"
+                alt="TrustWeb"
+                width="38"
+                height="38"
+                style={{ filter: 'brightness(0) invert(1)', display: 'block' }}
+              />
             </div>
             <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '6px' }}>TrustWeb</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
