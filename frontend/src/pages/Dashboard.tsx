@@ -426,10 +426,9 @@ export default function Dashboard() {
             <div style={{ height: '6px', borderRadius: '3px', background: 'var(--surface-2)', overflow: 'hidden' }}>
               <div ref={barRef} style={{
                 height: '100%', borderRadius: '3px',
-                background: 'linear-gradient(90deg, var(--accent), var(--accent-light))',
+                background: 'var(--accent)',
                 width: winRateAnimated ? `${winRate}%` : '0%',
                 transition: 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: '0 0 8px var(--accent-glow)',
               }} />
             </div>
           </div>
