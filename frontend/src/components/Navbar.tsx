@@ -57,18 +57,22 @@ export default function Navbar({ user, username }: Props) {
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
         >
-          {/* Animated logo mark */}
+          {/* Dragon logo mark */}
           <div style={{
-            width: '24px', height: '24px', borderRadius: '6px',
+            width: '28px', height: '28px', borderRadius: '6px',
             background: 'var(--accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
             boxShadow: '0 0 12px rgba(var(--accent-rgb),0.4)',
             transition: 'box-shadow 0.3s',
           }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
-              <path d="M12 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
+            <img
+              src="/dragon-head-evil-legend-myth-svgrepo-com.svg"
+              alt=""
+              width="18"
+              height="18"
+              style={{ filter: 'brightness(0) invert(1)', display: 'block' }}
+            />
           </div>
           <span style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em', transition: 'color 0.15s' }}>
             Trust<span className="animate-gradient-text" style={{ fontWeight: 800 }}>Web</span>
