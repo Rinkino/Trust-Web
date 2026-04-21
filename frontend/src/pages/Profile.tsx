@@ -148,9 +148,9 @@ export default function ProfilePage() {
           {/* Avatar */}
           <div style={{
             width: '56px', height: '56px', borderRadius: '50%', flexShrink: 0,
-            background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
+            background: 'var(--accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '22px', fontWeight: 800, color: '#fff',
+            fontSize: '22px', fontWeight: 700, color: '#fff',
           }}>
             {profile.username[0].toUpperCase()}
           </div>

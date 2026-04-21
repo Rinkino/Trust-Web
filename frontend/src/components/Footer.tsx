@@ -21,10 +21,9 @@ export default function Footer() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
               <div style={{
                 width: '28px', height: '28px',
-                background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
-                borderRadius: '8px',
+                background: 'var(--accent)',
+                borderRadius: '6px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 0 12px var(--accent-glow)',
               }}>
                 <Shield size={14} strokeWidth={2} color="#fff" />
               </div>

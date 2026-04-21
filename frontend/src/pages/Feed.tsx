@@ -195,9 +195,9 @@ export default function Feed() {
 
                 <div style={{
                   width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                  background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
+                  background: 'var(--accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '14px', fontWeight: 800, color: '#fff',
+                  fontSize: '14px', fontWeight: 700, color: '#fff',
                 }}>
                   {user.username[0].toUpperCase()}
                 </div>
@@ -248,9 +248,9 @@ export default function Feed() {
 
                 <div style={{
                   width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                  background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
+                  background: 'var(--accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '14px', fontWeight: 800, color: '#fff',
+                  fontSize: '14px', fontWeight: 700, color: '#fff',
                 }}>
                   {user.username[0].toUpperCase()}
                 </div>

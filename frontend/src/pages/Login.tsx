@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Lock, ShieldCheck, TrendingUp, Shield, Mail, Eye, EyeOff } from 'lucide-react'
-import Aurora from '../components/Aurora'
 
 type AuthMode = 'signin' | 'signup' | 'forgot'
 
@@ -11,6 +10,7 @@ export default function Login() {
   const [email, setEmail]           = useState('')
   const [password, setPassword]     = useState('')
   const [confirm, setConfirm]       = useState('')
+  const [username, setUsername]     = useState('')
   const [showPw, setShowPw]         = useState(false)
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
@@ -50,10 +50,22 @@ export default function Login() {
     setLoading(true)
 
     if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({ email, password })
+      if (!username || username.length < 3) {
+        setError('Username must be at least 3 characters'); setLoading(false); return
+      }
+      const { data, error } = await supabase.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+      })
+      if (error) { setError(error.message); setLoading(false); return }
+      // If session returned immediately (email confirmation disabled) set username
+      if (data.session && data.user) {
+        await supabase.from('profiles').update({ username: username.toLowerCase().replace(/\s/g, '') }).eq('id', data.user.id)
+        // onAuthStateChange in App.tsx will redirect — nothing to do here
+      } else {
+        setSuccess('Account created! Check your inbox to confirm your email, then sign in.')
+      }
       setLoading(false)
-      if (error) setError(error.message)
-      else setSuccess('Account created! Check your email to confirm, then sign in.')
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       setLoading(false)
@@ -63,28 +75,25 @@ export default function Login() {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
-      <Aurora />
-      <div style={{
-        position: 'relative', zIndex: 1,
-        minHeight: 'calc(100vh - 60px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px',
-      }}>
+    <div style={{
+      minHeight: 'calc(100vh - 60px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '24px',
+    }}>
+      <div>
         <div className="animate-scale-in" style={{ width: '100%', maxWidth: '400px' }}>
 
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <div className="animate-float" style={{
-              width: '64px', height: '64px', margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
-              borderRadius: '18px',
+            <div style={{
+              width: '56px', height: '56px', margin: '0 auto 16px',
+              background: 'var(--accent)',
+              borderRadius: '14px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 0 40px var(--accent-glow)',
             }}>
-              <Shield size={28} strokeWidth={1.5} color="#fff" />
+              <Shield size={24} strokeWidth={1.5} color="#fff" />
             </div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '6px' }}>TrustWeb</h1>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '6px' }}>TrustWeb</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
               Build your prediction credibility
             </p>
@@ -179,6 +188,22 @@ export default function Login() {
                         {m === 'signin' ? 'Sign In' : 'Sign Up'}
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {mode === 'signup' && (
+                  <div>
+                    <label className="label" style={{ display: 'block', marginBottom: '8px' }}>Username</label>
+                    <input
+                      className="input"
+                      type="text"
+                      value={username}
+                      onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="yourname"
+                      minLength={3}
+                      required
+                      autoComplete="username"
+                    />
                   </div>
                 )}
 
