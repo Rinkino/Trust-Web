@@ -1,0 +1,17 @@
+{
+  "name": "TrustWeb",
+  "short_name": "TrustWeb",
+  "description": "Build your prediction credibility",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#060810",
+  "theme_color": "#94a3b8",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
