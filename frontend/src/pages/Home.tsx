@@ -445,6 +445,24 @@ export default function Home() {
             {/* ── Left ── */}
             <div>
 
+              {/* Brand icons */}
+              <div className="animate-bounce-in" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
+                {[
+                  { src: '/soccer-ball-svgrepo-com.svg',    label: 'Sports' },
+                  { src: '/bitcoin-circle-svgrepo-com.svg', label: 'Crypto' },
+                  { src: '/chart-bearish-svgrepo-com.svg',  label: 'Markets' },
+                ].map(({ src, label }) => (
+                  <div key={src} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px',
+                    padding: '12px 16px', borderRadius: '12px',
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  }}>
+                    <img src={src} alt={label} style={{ width: 26, height: 26, filter: 'brightness(0) invert(1)', opacity: 0.75 }} />
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.04em' }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+
               {/* Live badge */}
               <div className="animate-fade-in" style={{ marginBottom: '36px' }}>
                 <div style={{

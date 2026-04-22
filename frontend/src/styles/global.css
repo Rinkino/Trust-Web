@@ -1,5 +1,4 @@
 /* ── Theme Variables ── */
-:root,
 [data-theme="midnight"] {
   --font-display: 'DM Serif Display', Georgia, serif;
   --bg: #08080f;
@@ -54,6 +53,167 @@
   --text: #e4eef8;
   --text-muted: #5a788a;
   --text-subtle: #162230;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="crimson"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #0f0608;
+  --surface: #1a0b0d;
+  --surface-2: #240f12;
+  --border: #3a1418;
+  --border-hover: #541e24;
+  --accent: #dc2626;
+  --accent-light: #f87171;
+  --accent-glow: rgba(220, 38, 38, 0.25);
+  --accent-rgb: 220, 38, 38;
+  --text: #f0e4e4;
+  --text-muted: #8a5a5a;
+  --text-subtle: #3c1a1a;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="gold"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #0d0a04;
+  --surface: #181208;
+  --surface-2: #221a0c;
+  --border: #362a10;
+  --border-hover: #4e3e18;
+  --accent: #f59e0b;
+  --accent-light: #fbbf24;
+  --accent-glow: rgba(245, 158, 11, 0.25);
+  --accent-rgb: 245, 158, 11;
+  --text: #f0ece0;
+  --text-muted: #8a7a50;
+  --text-subtle: #3a2e10;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="sunset"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #0f0804;
+  --surface: #1a1008;
+  --surface-2: #241810;
+  --border: #3a2414;
+  --border-hover: #54341e;
+  --accent: #f97316;
+  --accent-light: #fb923c;
+  --accent-glow: rgba(249, 115, 22, 0.25);
+  --accent-rgb: 249, 115, 22;
+  --text: #f0ebe4;
+  --text-muted: #8a6a50;
+  --text-subtle: #3c2010;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="rose"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #0f060c;
+  --surface: #1a0d18;
+  --surface-2: #241222;
+  --border: #3a1836;
+  --border-hover: #54224e;
+  --accent: #ec4899;
+  --accent-light: #f472b6;
+  --accent-glow: rgba(236, 72, 153, 0.25);
+  --accent-rgb: 236, 72, 153;
+  --text: #f0e4ec;
+  --text-muted: #8a5a78;
+  --text-subtle: #3c1832;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="violet"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #070610;
+  --surface: #100e1e;
+  --surface-2: #16142a;
+  --border: #22203c;
+  --border-hover: #302e58;
+  --accent: #8b5cf6;
+  --accent-light: #a78bfa;
+  --accent-glow: rgba(139, 92, 246, 0.25);
+  --accent-rgb: 139, 92, 246;
+  --text: #ece8f8;
+  --text-muted: #6a5a90;
+  --text-subtle: #201c40;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="cobalt"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #04060f;
+  --surface: #080e1e;
+  --surface-2: #0e1630;
+  --border: #142040;
+  --border-hover: #1c2e5c;
+  --accent: #3b82f6;
+  --accent-light: #60a5fa;
+  --accent-glow: rgba(59, 130, 246, 0.25);
+  --accent-rgb: 59, 130, 246;
+  --text: #e4eaf8;
+  --text-muted: #4a6090;
+  --text-subtle: #101e40;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+[data-theme="teal"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #040d0c;
+  --surface: #081816;
+  --surface-2: #0e2220;
+  --border: #143430;
+  --border-hover: #1c4c48;
+  --accent: #14b8a6;
+  --accent-light: #2dd4bf;
+  --accent-glow: rgba(20, 184, 166, 0.25);
+  --accent-rgb: 20, 184, 166;
+  --text: #e4f0ee;
+  --text-muted: #4a8080;
+  --text-subtle: #103430;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
+:root,
+[data-theme="slate"] {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #060810;
+  --surface: #0c1020;
+  --surface-2: #121830;
+  --border: #1e2440;
+  --border-hover: #2a3258;
+  --accent: #94a3b8;
+  --accent-light: #cbd5e1;
+  --accent-glow: rgba(148, 163, 184, 0.25);
+  --accent-rgb: 148, 163, 184;
+  --text: #e8ecf4;
+  --text-muted: #6070a0;
+  --text-subtle: #1e2440;
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
