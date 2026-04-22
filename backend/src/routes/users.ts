@@ -9,6 +9,38 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Signup — create user with admin API so email is auto-confirmed, no verification email needed
+router.post('/signup', async (req: AuthRequest, res: Response) => {
+  const { email, password, username } = req.body as { email?: string; password?: string; username?: string }
+
+  if (!email || !password || !username)
+    return res.status(400).json({ error: 'Email, password and username are required' })
+  if (username.length < 3)
+    return res.status(400).json({ error: 'Username must be at least 3 characters' })
+  if (password.length < 8)
+    return res.status(400).json({ error: 'Password must be at least 8 characters' })
+
+  const clean = username.toLowerCase().replace(/[^a-z0-9_]/g, '')
+
+  // Check username taken
+  const { data: existing } = await supabase
+    .from('profiles').select('id').eq('username', clean).maybeSingle()
+  if (existing) return res.status(400).json({ error: 'Username already taken' })
+
+  // Create user — email_confirm:true skips the verification email
+  const { data, error } = await supabase.auth.admin.createUser({
+    email: email.trim().toLowerCase(),
+    password,
+    email_confirm: true,
+  })
+  if (error) return res.status(400).json({ error: error.message })
+
+  // Write username to profile
+  await supabase.from('profiles').update({ username: clean }).eq('id', data.user.id)
+
+  res.json({ ok: true })
+})
+
 // Search users by username prefix
 router.get('/search', async (req: AuthRequest, res: Response) => {
   const q = String(req.query.q || '').trim().slice(0, 50)
