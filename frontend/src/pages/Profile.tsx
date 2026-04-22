@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
 import PredictionCard from '../components/PredictionCard'
 import ScoreBadge from '../components/ScoreBadge'
+import DragonSpinner from '../components/DragonSpinner'
 import { Target, Hash, Award, Flame, ArrowLeft, BarChart2, UserPlus, UserMinus } from 'lucide-react'
 
 type Profile = {
@@ -89,7 +90,7 @@ export default function ProfilePage() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px', color: 'var(--text-muted)' }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+      <DragonSpinner size={18} color="var(--accent)" />
       Loading...
     </div>
   )

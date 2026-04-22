@@ -3,6 +3,8 @@ import type React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import PredictionCard from '../components/PredictionCard'
+import LoadingSpinner from '../components/LoadingSpinner'
+import DragonSpinner from '../components/DragonSpinner'
 import { Rss, Trophy, Flame, Radio, Award, TrendingUp } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -88,9 +90,8 @@ export default function Feed() {
   ]
 
   if (initialLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px', color: 'var(--text-muted)' }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
-      Loading...
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <LoadingSpinner size={80} label="Loading predictions…" />
     </div>
   )
 
@@ -161,7 +162,7 @@ export default function Feed() {
           {/* Loading more indicator */}
           {loadingMore && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
-              <div style={{ width: '14px', height: '14px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+              <DragonSpinner size={14} color="var(--accent)" />
               Loading more...
             </div>
           )}

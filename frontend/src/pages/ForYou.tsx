@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../lib/api'
 import PredictionCard from '../components/PredictionCard'
+import DragonSpinner from '../components/DragonSpinner'
 import { Sparkles, Clock } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -135,7 +136,7 @@ export default function ForYou() {
 
       {loadingMore && (
         <div style={{ padding: '16px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+          <DragonSpinner size={20} color="var(--accent)" />
         </div>
       )}
 

@@ -5,6 +5,7 @@ import {
   TrendingUp, Flame, Search, RefreshCw, Activity,
   Lock, Ticket, Wrench, Bot,
 } from 'lucide-react'
+import DragonSpinner from '../components/DragonSpinner'
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 
@@ -154,9 +155,10 @@ function LoginGate({ onAuth }: { onAuth: (creds: string) => void }) {
               padding: '12px', borderRadius: '10px', fontWeight: 700, fontSize: '14px',
               background: 'var(--accent)', color: '#fff', border: 'none', cursor: loading ? 'default' : 'pointer',
               opacity: loading || !user || !pass ? 0.6 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             }}
           >
-            {loading ? 'Checking...' : 'Enter'}
+            {loading ? <><DragonSpinner size={14} color="#fff" /> Checking...</> : 'Enter'}
           </button>
         </form>
       </div>
@@ -374,7 +376,7 @@ export default function Admin() {
 
       {loading && (
         <div style={{ padding: '60px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+          <DragonSpinner size={24} color="var(--accent)" />
         </div>
       )}
 

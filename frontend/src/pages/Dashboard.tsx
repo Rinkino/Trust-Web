@@ -3,8 +3,10 @@ import type React from 'react'
 import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
 import ScoreBadge from '../components/ScoreBadge'
+import LoadingSpinner from '../components/LoadingSpinner'
 import PredictionCard from '../components/PredictionCard'
 import AnimatedCounter from '../components/AnimatedCounter'
+import DragonSpinner from '../components/DragonSpinner'
 import { Target, Hash, Award, Link as LinkIcon, Lock, BarChart2, TrendingUp, Settings, AlertTriangle, CheckCircle } from 'lucide-react'
 
 const PLATFORMS = [
@@ -326,9 +328,8 @@ export default function Dashboard() {
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px', color: 'var(--text-muted)' }}>
-      <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
-      Loading...
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <LoadingSpinner size={80} label="Loading your dashboard…" />
     </div>
   )
 
@@ -504,7 +505,7 @@ export default function Dashboard() {
                   <>
                     {slipPreviewLoading && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+                        <DragonSpinner size={12} color="var(--accent)" />
                         Loading slip...
                       </div>
                     )}
@@ -622,7 +623,7 @@ export default function Dashboard() {
 
                 {previewLoading && (
                   <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+                    <DragonSpinner size={12} color="var(--accent)" />
                     Loading market...
                   </div>
                 )}
@@ -706,7 +707,7 @@ export default function Dashboard() {
               >
                 {submitting ? (
                   <>
-                    <span style={{ width: '14px', height: '14px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+                    <DragonSpinner size={14} color="#fff" />
                     Locking...
                   </>
                 ) : (

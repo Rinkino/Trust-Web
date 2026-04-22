@@ -57,9 +57,9 @@ export default function App() {
           <div style={{ flex: 1 }}>
             <Routes>
               <Route path="/"              element={user ? <Navigate to="/home" replace /> : <Home />} />
-              <Route path="/home"          element={<ForYou />} />
-              <Route path="/explore"       element={<Explore />} />
-              <Route path="/leaderboard"   element={<LeaderboardPage />} />
+              <Route path="/home"          element={user ? <ForYou /> : <Navigate to="/login" replace />} />
+              <Route path="/explore"       element={user ? <Explore /> : <Navigate to="/login" replace />} />
+              <Route path="/leaderboard"   element={user ? <LeaderboardPage /> : <Navigate to="/login" replace />} />
               <Route path="/notifications" element={user ? <Notifications /> : <Navigate to="/login" />} />
               <Route path="/profile"       element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
               <Route path="/login"         element={!user ? <Login /> : <Navigate to="/home" />} />

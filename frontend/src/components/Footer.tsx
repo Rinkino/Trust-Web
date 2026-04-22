@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Shield, GitBranch, AtSign, Mail } from 'lucide-react'
+import { GitBranch, AtSign, Mail } from 'lucide-react'
+import TrustWebBadge from './TrustWebBadge'
 
 export default function Footer() {
   return (
@@ -18,15 +19,8 @@ export default function Footer() {
         }}>
           {/* Brand */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-              <div style={{
-                width: '28px', height: '28px',
-                background: 'var(--accent)',
-                borderRadius: '6px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Shield size={14} strokeWidth={2} color="#fff" />
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <TrustWebBadge size={32} animate />
               <span style={{ fontWeight: 800, fontSize: '15px', letterSpacing: '-0.02em' }}>
                 Trust<span style={{ color: 'var(--accent)' }}>Web</span>
               </span>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import PredictionCard from '../components/PredictionCard'
+import DragonSpinner from '../components/DragonSpinner'
 import { Search, Flame, TrendingUp, X } from 'lucide-react'
 
 type User = {
@@ -101,7 +102,7 @@ export default function Explore() {
         <div>
           {searching && (
             <div style={{ padding: '20px 16px', display: 'flex', justifyContent: 'center' }}>
-              <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+              <DragonSpinner size={18} color="var(--accent)" />
             </div>
           )}
           {!searching && userResults.length === 0 && (
