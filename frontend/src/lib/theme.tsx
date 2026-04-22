@@ -7,8 +7,18 @@ function setFavicon(color: string) {
   const url = `data:image/svg+xml,${encodeURIComponent(DRAGON_SVG(color))}`
   document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]')
     .forEach(el => { el.href = url })
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-  if (meta) meta.content = color
+  // Update theme-color for iOS Safari + Android Chrome toolbar/status bar
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
+    .forEach(el => { el.content = color })
+  // Update manifest theme_color for Android PWA / add-to-homescreen
+  const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+  if (manifest) {
+    const blob = new Blob(
+      [JSON.stringify({ name: 'TrustWeb', short_name: 'TrustWeb', start_url: '/', display: 'browser', background_color: '#060810', theme_color: color, icons: [{ src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }] })],
+      { type: 'application/json' }
+    )
+    manifest.href = URL.createObjectURL(blob)
+  }
 }
 
 export type Theme =
