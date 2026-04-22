@@ -104,22 +104,28 @@ export default function LogoOrbit() {
         </svg>
       </div>
 
-      {/* Speed control */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 8 }}>
-        {(['slow', 'med', 'fast'] as Speed[]).map(s => (
+      {/* Speed control — 1 dot = slow, 2 = med, 3 = fast */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+        {(['slow', 'med', 'fast'] as Speed[]).map((s, i) => (
           <button
             key={s}
             onClick={() => setSpeed(s)}
+            title={s}
             style={{
-              padding: '3px 10px', borderRadius: 6, border: 'none',
-              fontSize: 11, cursor: 'pointer',
-              background: speed === s ? 'var(--accent)' : 'var(--surface-2)',
-              color: speed === s ? '#fff' : 'var(--text-muted)',
-              fontWeight: speed === s ? 700 : 400,
-              transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: 2,
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px',
             }}
           >
-            {s}
+            {Array.from({ length: i + 1 }).map((_, d) => (
+              <span
+                key={d}
+                style={{
+                  width: 5, height: 5, borderRadius: '50%', display: 'block',
+                  background: speed === s ? 'var(--accent)' : 'var(--border-hover)',
+                  transition: 'background 0.15s',
+                }}
+              />
+            ))}
           </button>
         ))}
       </div>
