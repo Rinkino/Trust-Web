@@ -1,6 +1,6 @@
 import LogoOrbit from './LogoOrbit'
 
-type Props = { label?: string }
+type Props = { label?: string; size?: number }
 
 export default function LoadingSpinner({ label }: Props) {
   return (
