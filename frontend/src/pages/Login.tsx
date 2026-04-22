@@ -55,19 +55,20 @@ export default function Login() {
       if (!username || username.length < 3) {
         setError('Username must be at least 3 characters'); setLoading(false); return
       }
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+      // Use backend endpoint — creates user with email auto-confirmed, no verification email
+      const apiUrl = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${apiUrl}/api/users/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, username }),
       })
-      if (error) { setError(error.message); setLoading(false); return }
-      // If session returned immediately (email confirmation disabled) set username
-      if (data.session && data.user) {
-        await supabase.from('profiles').update({ username: username.toLowerCase().replace(/\s/g, '') }).eq('id', data.user.id)
-        // onAuthStateChange in App.tsx will redirect — nothing to do here
-      } else {
-        setSuccess('Account created! Check your inbox to confirm your email, then sign in.')
-      }
+      const json = await res.json()
+      if (!res.ok) { setError(json.error || 'Signup failed'); setLoading(false); return }
+      // Account created — sign in immediately (email is already confirmed)
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
       setLoading(false)
+      if (signInErr) setError(signInErr.message)
+      // on success, onAuthStateChange in App.tsx handles redirect
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       setLoading(false)

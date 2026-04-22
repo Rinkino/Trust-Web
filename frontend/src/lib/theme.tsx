@@ -7,6 +7,8 @@ function setFavicon(color: string) {
   const url = `data:image/svg+xml,${encodeURIComponent(DRAGON_SVG(color))}`
   document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="apple-touch-icon"]')
     .forEach(el => { el.href = url })
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (meta) meta.content = color
 }
 
 export type Theme =
