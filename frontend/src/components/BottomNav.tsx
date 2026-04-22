@@ -16,6 +16,7 @@ const tabs = [
 
 export default function BottomNav({ user, notifCount = 0 }: Props) {
   const location = useLocation()
+  if (!user) return null
   if (location.pathname === '/x7k2-admin' || location.pathname === '/') return null
 
   return (
