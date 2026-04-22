@@ -1,4 +1,25 @@
 /* ── Theme Variables ── */
+/* :root provides defaults before JS sets data-theme — must come FIRST so all [data-theme] blocks override it */
+:root {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --bg: #060810;
+  --surface: #0c1020;
+  --surface-2: #121830;
+  --border: #1e2440;
+  --border-hover: #2a3258;
+  --accent: #94a3b8;
+  --accent-light: #cbd5e1;
+  --accent-glow: rgba(148, 163, 184, 0.25);
+  --accent-rgb: 148, 163, 184;
+  --text: #e8ecf4;
+  --text-muted: #6070a0;
+  --text-subtle: #1e2440;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --streak: #f97316;
+}
+
 [data-theme="midnight"] {
   --font-display: 'DM Serif Display', Georgia, serif;
   --bg: #08080f;
@@ -199,7 +220,6 @@
   --streak: #f97316;
 }
 
-:root,
 [data-theme="slate"] {
   --font-display: 'DM Serif Display', Georgia, serif;
   --bg: #060810;
