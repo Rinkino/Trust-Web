@@ -6,11 +6,11 @@ import predictionsRouter from './routes/predictions'
 import usersRouter from './routes/users'
 import adminRouter from './routes/admin'
 import followsRouter from './routes/follows'
-import { startResolutionCron } from './services/resolver'
+import { startResolutionCron, runResolutionCycle } from './services/resolver'
 
 dotenv.config()
 
-const app = express()
+export const app = express()
 const PORT = process.env.PORT || 3001
 
 app.set('trust proxy', 1)
@@ -65,12 +65,30 @@ app.use('/api/users/search', search)
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'Trust-Web API' }))
 
+// Called by Vercel Cron or cron-job.org — runs the resolution cycle once
+app.post('/api/resolve', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET
+  const auth       = req.headers['authorization']
+  const xSecret    = req.headers['x-cron-secret']
+  if (cronSecret && auth !== `Bearer ${cronSecret}` && xSecret !== cronSecret) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+  try {
+    await runResolutionCycle()
+    res.json({ ok: true, ran_at: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' })
+  }
+})
+
 app.use('/api/predictions', predictionsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/follows', followsRouter)
 app.use('/api/x7k2-internal', adminRouter)
 
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`Trust-Web API running on http://0.0.0.0:${PORT}`)
-  startResolutionCron()
-})
+if (!process.env.VERCEL) {
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`Trust-Web API running on http://0.0.0.0:${PORT}`)
+    startResolutionCron()
+  })
+}

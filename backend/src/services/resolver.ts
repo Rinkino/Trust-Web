@@ -355,7 +355,18 @@ export async function resolveSporbetPredictions(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Cron schedule
+// Single cycle — runs both resolvers once. Called by cron, feed trigger, or HTTP.
+// ---------------------------------------------------------------------------
+
+export async function runResolutionCycle(): Promise<void> {
+  await Promise.allSettled([
+    resolvePolymarketPredictions(),
+    resolveSporbetPredictions(),
+  ])
+}
+
+// ---------------------------------------------------------------------------
+// Cron schedule (local dev only — Vercel uses /api/resolve endpoint)
 // ---------------------------------------------------------------------------
 
 export function startResolutionCron(): void {
