@@ -7,6 +7,7 @@ import { fetchPolymarketMarket } from '../services/platforms/polymarket'
 import { retrieveSlip } from '../services/platforms/convertbetcodes'
 import { buildLegsFromSlip, isVirtualSport } from '../services/platforms/apisports'
 import { notifyFollowers } from './follows'
+import { runResolutionCycle } from '../services/resolver'
 
 const router = Router()
 
@@ -206,6 +207,8 @@ router.get('/feed', async (req: Request, res: Response) => {
   const limit  = Math.min(Number(req.query.limit)  || 20, 50)
   const offset = Math.max(Number(req.query.offset) || 0,  0)
   const sort   = req.query.sort === 'recent' ? 'recent' : 'visibility'
+  // Piggyback resolution on feed traffic — best-effort, non-blocking
+  setImmediate(() => runResolutionCycle().catch(() => {}))
   const VALID_STATUSES = ['PENDING', 'WON', 'LOST', 'VOID']
   const rawStatus = String(req.query.status || 'PENDING')
   const status = rawStatus === 'all' ? null : (VALID_STATUSES.includes(rawStatus) ? rawStatus : 'PENDING')

@@ -12,9 +12,7 @@ import * as dotenv from 'dotenv'
 
 dotenv.config()
 
-const CHROME_PATH =
-  process.env.CHROME_PATH ||
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const CHROME_PATH = process.env.CHROME_PATH || ''
 
 const shareCode = process.argv[2] || 'P5BAH9'
 
@@ -24,7 +22,7 @@ const shareCode = process.argv[2] || 'P5BAH9'
 
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: CHROME_PATH,
+    ...(CHROME_PATH ? { executablePath: CHROME_PATH } : {}),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
