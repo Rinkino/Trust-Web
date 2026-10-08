@@ -532,7 +532,7 @@ export default function Admin() {
       {!loading && tab === 'live' && (
         <div style={{ padding: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)', animation: 'pulse 2s infinite' }} />
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }} />
             <span style={{ fontSize: '14px', fontWeight: 700 }}>{live.length} predictions live right now</span>
           </div>
           {live.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No pending predictions.</p>}

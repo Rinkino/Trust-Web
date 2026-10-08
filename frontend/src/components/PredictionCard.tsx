@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Lock, ExternalLink, Trophy, X, Clock, MinusCircle, Hash, Flame, ChevronDown, Zap } from 'lucide-react'
-import type React from 'react'
+import { Lock, ExternalLink, Trophy, X, Clock, MinusCircle, Flame, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
 
 const BOOKIE_MAP: Record<string, string> = {
@@ -50,32 +49,24 @@ type Props = {
 
 const STATUS = {
   PENDING: {
-    cls: 'pill pill-pending pending-pulse',
+    cls: 'pill pill-pending',
     icon: <Clock    size={10} strokeWidth={2} />,
     label: 'Pending',
-    borderColor: 'rgba(245,158,11,0.15)',
-    glow: 'rgba(245,158,11,0.04)',
   },
   WON: {
     cls: 'pill pill-won',
     icon: <Trophy   size={10} strokeWidth={2} />,
     label: 'Won',
-    borderColor: 'rgba(16,185,129,0.2)',
-    glow: 'rgba(16,185,129,0.04)',
   },
   LOST: {
     cls: 'pill pill-lost',
     icon: <X        size={10} strokeWidth={2} />,
     label: 'Lost',
-    borderColor: 'rgba(239,68,68,0.15)',
-    glow: 'rgba(239,68,68,0.03)',
   },
   VOID: {
     cls: 'pill pill-void',
     icon: <MinusCircle size={10} strokeWidth={2} />,
     label: 'Void',
-    borderColor: 'var(--border)',
-    glow: 'transparent',
   },
 }
 
@@ -98,31 +89,9 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
   const [legs, setLegs]               = useState<SlipLeg[] | null>(null)
   const [legsLoading, setLegsLoading] = useState(false)
   const [legsError, setLegsError]     = useState('')
-  const [hovered, setHovered]         = useState(false)
-
-  const cardRef = useRef<HTMLDivElement>(null)
 
   const bookie    = BOOKIE_MAP[prediction.platform]
   const canExpand = !!bookie || prediction.platform === 'Polymarket'
-
-  /* 3D tilt */
-  const onMove = useCallback((e: React.MouseEvent) => {
-    const el = cardRef.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const x = (e.clientX - r.left - r.width  / 2) / (r.width  / 2)
-    const y = (e.clientY - r.top  - r.height / 2) / (r.height / 2)
-    el.style.transition = 'transform 0.06s ease'
-    el.style.transform  = `perspective(900px) rotateY(${x * 5}deg) rotateX(${-y * 5}deg) translateY(-2px)`
-  }, [])
-
-  const onLeave = useCallback(() => {
-    const el = cardRef.current
-    if (!el) return
-    el.style.transition = 'transform 0.55s cubic-bezier(0.16,1,0.3,1)'
-    el.style.transform  = 'perspective(900px) rotateY(0deg) rotateX(0deg) translateY(0)'
-    setHovered(false)
-  }, [])
 
   async function handleToggle() {
     if (!canExpand) return
@@ -153,20 +122,7 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
   const profile = prediction.profiles
 
   return (
-    <article
-      ref={cardRef}
-      className={`${prediction.status === 'WON' ? 'won-shimmer' : ''} card-3d`}
-      style={{
-        borderBottom: '1px solid var(--border)',
-        backgroundColor: hovered ? sc.glow : 'transparent',
-        borderLeft: hovered ? `2px solid ${sc.borderColor}` : '2px solid transparent',
-        transition: 'background 0.2s, border-left-color 0.2s',
-        willChange: 'transform',
-      }}
-      onMouseMove={onMove}
-      onMouseLeave={onLeave}
-      onMouseEnter={() => setHovered(true)}
-    >
+    <article style={{ borderBottom: '1px solid var(--border)' }}>
       <div style={{ padding: '14px 16px', display: 'flex', gap: '12px' }}>
 
         {/* Avatar */}
@@ -180,10 +136,7 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
               width: '40px', height: '40px', borderRadius: '50%',
               background: 'var(--accent)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '14px', fontWeight: 700, color: '#fff',
-              transition: 'box-shadow 0.2s, transform 0.2s',
-              boxShadow: hovered ? '0 0 16px rgba(var(--accent-rgb),0.4)' : 'none',
-              transform: hovered ? 'scale(1.06)' : 'scale(1)',
+              fontSize: '14px', fontWeight: 600, color: '#fff',
             }}>
               {profile.username[0].toUpperCase()}
             </div>
@@ -202,25 +155,22 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
               <Link
                 to={`/u/${profile.username}`}
                 onClick={e => e.stopPropagation()}
-                style={{ fontWeight: 700, color: 'var(--text)', fontSize: '14px', textDecoration: 'none' }}
+                style={{ fontWeight: 600, color: 'var(--text)', fontSize: '14px', textDecoration: 'none' }}
               >
                 {profile.username}
               </Link>
               <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>·</span>
               <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{timeAgo(prediction.locked_at)}</span>
               {profile.correct_streak > 0 && (
-                <span className="animate-streak" style={{
+                <span title="Win streak" style={{
                   color: 'var(--streak)', fontSize: '12px',
                   display: 'inline-flex', alignItems: 'center', gap: '3px',
-                  background: 'rgba(249,115,22,0.08)',
-                  padding: '2px 6px', borderRadius: '20px',
-                  border: '1px solid rgba(249,115,22,0.18)',
                 }}>
                   <Flame size={10} strokeWidth={2} />{profile.correct_streak}
                 </span>
               )}
-              <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-muted)' }}>
-                {Math.max(0, profile.credit_score).toFixed(1)} cr
+              <span className="mono" style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-muted)' }}>
+                {Math.max(0, profile.credit_score).toFixed(1)} credit
               </span>
             </div>
           )}
@@ -244,13 +194,13 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
           {prediction.needs_review && (
             <div style={{
               display: 'flex', gap: '8px', alignItems: 'flex-start',
-              padding: '8px 12px', borderRadius: '8px', marginBottom: '10px',
+              padding: '8px 12px', borderRadius: 'var(--radius)', marginBottom: '10px',
               background: 'rgba(245,158,11,0.07)',
               border: '1px solid rgba(245,158,11,0.25)',
             }}>
               <Clock size={13} strokeWidth={1.5} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: '1px' }} />
               <div>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--warning)' }}>Pending manual review</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--warning)' }}>Pending manual review</span>
                 {prediction.review_note && (
                   <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.5 }}>
                     {prediction.review_note}
@@ -261,38 +211,19 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
           )}
 
           {/* Pills */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{
-              padding: '3px 8px', borderRadius: '5px',
-              background: 'var(--surface-2)', border: '1px solid var(--border)',
-              fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500,
-            }}>
-              {prediction.platform}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '10px', fontSize: '12px' }}>
+            <span style={{ color: 'var(--text-muted)' }}>{prediction.platform}</span>
+            <span className="mono" style={{ color: 'var(--text)' }}>
+              <span style={{ color: 'var(--text-muted)' }}>@</span>{prediction.odds.toFixed(2)}
             </span>
-            <span style={{
-              padding: '3px 8px', borderRadius: '5px',
-              background: 'rgba(var(--accent-rgb),0.1)',
-              border: '1px solid rgba(var(--accent-rgb),0.2)',
-              fontSize: '11px', color: 'var(--accent-light)', fontWeight: 700,
-              display: 'inline-flex', alignItems: 'center', gap: '3px',
-            }}>
-              <Zap size={9} strokeWidth={2} />×{prediction.odds}
-            </span>
-            <span className={sc.cls} style={{
-              display: 'inline-flex', alignItems: 'center', gap: '4px',
-              padding: '3px 8px', fontSize: '11px',
-              transition: 'transform 0.15s',
-            }}>
+            <span className={sc.cls} style={{ gap: '4px' }}>
               {sc.icon}{sc.label}
             </span>
             {prediction.score_contribution != null && prediction.score_contribution !== 0 && (
-              <span style={{
-                fontSize: '11px', fontWeight: 700,
+              <span className="mono" style={{
                 color: prediction.score_contribution > 0 ? 'var(--success)' : 'var(--danger)',
-                display: 'inline-flex', alignItems: 'center', gap: '2px',
-                animation: 'bounce-in 0.5s cubic-bezier(0.16,1,0.3,1) both',
               }}>
-                {prediction.score_contribution > 0 ? '+' : ''}{prediction.score_contribution.toFixed(2)}pts
+                {prediction.score_contribution > 0 ? '+' : ''}{prediction.score_contribution.toFixed(2)}
               </span>
             )}
           </div>
@@ -300,18 +231,15 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
           {/* Footer */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             {prediction.betslip_code && (
-              <span style={{
-                display: 'flex', alignItems: 'center', gap: '3px',
-                fontSize: '11px', color: 'var(--text-subtle)',
-              }}>
-                <Hash size={9} strokeWidth={1.5} />{prediction.betslip_code}
+              <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {prediction.betslip_code}
               </span>
             )}
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: '3px',
-              fontSize: '11px', color: 'var(--text-subtle)',
+            <span className="mono" title="Locked at" style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              fontSize: '11px', color: 'var(--text-muted)',
             }}>
-              <Lock size={9} strokeWidth={1.5} />
+              <Lock size={10} strokeWidth={1.5} />
               {new Date(prediction.locked_at).toLocaleDateString('en-GB', {
                 day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
               })}
@@ -323,7 +251,7 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
                 style={{
-                  fontSize: '11px', color: 'var(--accent)', textDecoration: 'none',
+                  fontSize: '11px', color: 'var(--accent-light)', textDecoration: 'none',
                   display: 'inline-flex', alignItems: 'center', gap: '3px',
                   transition: 'opacity 0.15s',
                 }}
@@ -349,7 +277,7 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
                 <ChevronDown
                   size={13} strokeWidth={1.5}
                   style={{
-                    transition: 'transform 0.3s cubic-bezier(0.16,1,0.3,1)',
+                    transition: 'transform 0.2s ease',
                     transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
                   }}
                 />
@@ -360,10 +288,9 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
           {/* Expanded legs */}
           {expanded && canExpand && (
             <div style={{
-              marginTop: '12px', borderRadius: '10px',
+              marginTop: '12px', borderRadius: 'var(--radius)',
               border: '1px solid var(--border)', overflow: 'hidden',
-              background: 'var(--surface-2)',
-              animation: 'scale-in 0.25s cubic-bezier(0.16,1,0.3,1)',
+              background: 'var(--surface)',
             }}>
               {legsLoading && (
                 <div style={{
@@ -392,11 +319,7 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
                         padding: '10px 16px',
                         borderBottom: i < legs.length - 1 ? '1px solid var(--border)' : 'none',
                         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px',
-                        animation: `row-in 0.35s ease ${i * 0.06}s both`,
-                        transition: 'background 0.12s',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(var(--accent-rgb),0.04)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px' }}>{leg.tournament}</p>
@@ -406,8 +329,8 @@ export default function PredictionCard({ prediction, showUser, index = 0 }: Prop
                         </p>
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p style={{ fontSize: '12px', fontWeight: 700 }}>@{leg.odds.toFixed(2)}</p>
-                        <p style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{leg.kickoff.replace('.utc', ' UTC')}</p>
+                        <p className="mono" style={{ fontSize: '12px' }}>@{leg.odds.toFixed(2)}</p>
+                        <p className="mono" style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{leg.kickoff.replace('.utc', ' UTC')}</p>
                       </div>
                     </li>
                   ))}

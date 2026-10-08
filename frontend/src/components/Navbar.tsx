@@ -62,8 +62,8 @@ export default function Navbar({ user, username }: Props) {
             <path d="M147.91,70.11l13.72,13.65l-21.9-7.9L147.91,70.11z"/>
             <path d="M181.003,133.297c0,0,6.706,6.836,16.005,8.195c-0.628,3.718-1.577,5.572-1.577,5.572s15.96,12.85,35.508,4.572c-0.902,10.276-13.643,14.81-13.643,14.81S230.983,183.407,258,173c-14.657,19.075-36.539,13.759-49.848,6.944C196.19,173.819,180.788,155.727,181.003,133.297z"/>
           </svg>
-          <span style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em' }}>
-            Trust<span className="animate-gradient-text" style={{ fontWeight: 800 }}>Web</span>
+          <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+            TrustWeb
           </span>
         </Link>
 
