@@ -153,7 +153,7 @@ function LoginGate({ onAuth }: { onAuth: (creds: string) => void }) {
             type="submit" disabled={loading || !user || !pass}
             style={{
               padding: '12px', borderRadius: '10px', fontWeight: 700, fontSize: '14px',
-              background: 'var(--accent)', color: '#fff', border: 'none', cursor: loading ? 'default' : 'pointer',
+              background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', cursor: loading ? 'default' : 'pointer',
               opacity: loading || !user || !pass ? 0.6 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             }}

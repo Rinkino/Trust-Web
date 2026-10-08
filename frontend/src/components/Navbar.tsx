@@ -159,7 +159,7 @@ export default function Navbar({ user, username }: Props) {
                   width: '32px', height: '32px', borderRadius: '50%',
                   background: 'var(--accent)',
                   border: showMenu ? '2px solid var(--accent-light)' : '2px solid transparent',
-                  cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: '#fff',
+                  cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: 'var(--on-accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0, transition: 'border-color 0.15s',
                 }}
@@ -215,7 +215,7 @@ export default function Navbar({ user, username }: Props) {
           ) : (
             <Link to="/login" style={{
               padding: '7px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              background: 'var(--accent)', color: '#fff', textDecoration: 'none',
+              background: 'var(--accent)', color: 'var(--on-accent)', textDecoration: 'none',
               transition: 'opacity 0.15s',
             }}
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}

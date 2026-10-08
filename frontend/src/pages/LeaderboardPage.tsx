@@ -130,7 +130,7 @@ export default function LeaderboardPage() {
               border: '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '13px', fontWeight: 600,
-              color: i === 0 && tab === 'credibility' ? '#fff' : 'var(--text)',
+              color: i === 0 && tab === 'credibility' ? 'var(--on-accent)' : 'var(--text)',
             }}>
               {u.username[0].toUpperCase()}
             </div>
