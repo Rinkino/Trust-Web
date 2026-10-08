@@ -1,116 +1,135 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Lock, Check } from 'lucide-react'
+import { ArrowRight, Lock, Check, X } from 'lucide-react'
 import type React from 'react'
 
-/* Worked examples from backend/src/services/scoring.ts, for a predictor
-   with 50+ resolved picks (full credibility weight). */
-const SCORING_EXAMPLES: { call: string; odds: string; result: string; delta: string; positive: boolean }[] = [
-  { call: 'Favourite, first win',     odds: '1.30', result: 'Won',  delta: '+1.49', positive: true },
-  { call: 'Outsider, first win',      odds: '3.00', result: 'Won',  delta: '+3.45', positive: true },
-  { call: 'Fifth win in a row',       odds: '2.00', result: 'Won',  delta: '+4.43', positive: true },
-  { call: 'Favourite, missed',        odds: '1.30', result: 'Lost', delta: '−0.77', positive: false },
-  { call: 'Outsider, missed',         odds: '3.00', result: 'Lost', delta: '−0.33', positive: false },
-  { call: 'Third miss in a row',      odds: '1.50', result: 'Lost', delta: '−2.78', positive: false },
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: 'Is it free?',
+    a: 'Yes. Creating an account, locking picks and having a public record cost nothing.',
+  },
+  {
+    q: 'Which bookmakers and markets work?',
+    a: 'Sportybet booking codes and Polymarket markets today. Betano and Kalshi are next.',
+  },
+  {
+    q: 'Do I have to give you my bookmaker login?',
+    a: 'No. You paste the booking code or market link you would share with anyone. We never touch your account or your money.',
+  },
+  {
+    q: 'Can I delete or edit a pick after locking it?',
+    a: "No, and that's the point. A booking code can't change once it's shared, and neither can your entry here.",
+  },
+  {
+    q: 'How is my score worked out?',
+    a: 'Everyone starts at 50. Winning at long odds earns more than winning at short odds; missing an easy one costs more than missing a long shot. Streaks amplify both.',
+  },
+  {
+    q: 'What if a match is postponed or a market is voided?',
+    a: 'The pick is marked void and your score does not move.',
+  },
 ]
 
-const PLATFORMS: { name: string; status: string; note: string; live: boolean }[] = [
-  { name: 'Polymarket',       status: 'Live',    note: 'Read from the Gamma API. Resolves when the market settles.', live: true },
-  { name: 'Sportybet',        status: 'Live',    note: 'Booking codes are loaded and checked after full time.',     live: true },
-  { name: 'Betano',           status: 'Planned', note: 'Same approach as Sportybet.',                                live: false },
-  { name: 'Kalshi',           status: 'Planned', note: 'Public API, similar to Polymarket.',                         live: false },
-]
-
-function Receipt() {
+function HeroSlip() {
   const rows: [string, React.ReactNode][] = [
-    ['Platform',  'Sportybet'],
     ['Selection', 'Arsenal to win'],
     ['Odds',      <span className="mono">2.10</span>],
-    ['Locked',    <span className="mono">14 Sep, 15:42 UTC</span>],
-    ['Kick-off',  <span className="mono">14 Sep, 16:30 UTC</span>],
-    ['Result',    <span style={{ color: 'var(--warning)' }}>Waiting for full time</span>],
+    ['Locked',    <span className="mono">15:42 UTC</span>],
+    ['Kick-off',  <span className="mono">16:30 UTC</span>],
   ]
   return (
-    <div className="receipt" aria-label="Example locked prediction">
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '14px 18px',
-      }}>
+    <div className="receipt" aria-hidden="true" style={{ boxShadow: '0 24px 48px rgba(0,0,0,0.35)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
           <Lock size={14} strokeWidth={2} style={{ color: 'var(--accent-light)' }} />
-          Locked prediction
+          Locked
         </span>
-        <span className="mono" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>BC9F2K</span>
+        <span className="pill pill-won">Won</span>
       </div>
       {rows.map(([k, v]) => (
         <div key={k} className="receipt-row">
           <span>{k}</span>
-          <span style={{ textAlign: 'right' }}>{v}</span>
+          <span>{v}</span>
         </div>
       ))}
-      <p style={{
-        padding: '12px 18px', borderTop: '1px solid var(--border)',
-        fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5,
-      }}>
-        Example. The booking code is the proof: it can&apos;t be edited after it&apos;s shared,
-        and the result comes from Sportybet&apos;s own page.
-      </p>
+      <div className="receipt-row" style={{ borderTopStyle: 'solid' }}>
+        <span>Credit</span>
+        <span className="mono" style={{ color: 'var(--success)' }}>62.4 &rarr; 64.8</span>
+      </div>
     </div>
   )
 }
 
 export default function Home() {
-  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' })
-  const [contactSent, setContactSent] = useState(false)
-  const [contactError, setContactError] = useState('')
-
-  function handleContactSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!contactForm.name || !contactForm.email || !contactForm.message) {
-      setContactError('Please fill in all three fields.'); return
-    }
-    const subject = encodeURIComponent(`TrustWeb contact from ${contactForm.name}`)
-    const body    = encodeURIComponent(`Name: ${contactForm.name}\nEmail: ${contactForm.email}\n\n${contactForm.message}`)
-    window.location.href = `mailto:hello@trustweb.app?subject=${subject}&body=${body}`
-    setContactSent(true); setContactError('')
-  }
-
   return (
     <div>
 
       {/* Hero */}
-      <section style={{ padding: '88px 0 96px' }}>
+      <section style={{ padding: '96px 0 112px' }}>
         <div className="page-wide">
-          <div className="home-hero" style={{
-            display: 'grid', gridTemplateColumns: '1.15fr 1fr',
-            gap: '72px', alignItems: 'center',
-          }}>
+          <div className="home-hero" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '80px', alignItems: 'center' }}>
             <div>
-              <p style={{ fontSize: '14px', color: 'var(--accent-light)', marginBottom: '20px' }}>
-                For tipsters, traders and anyone who makes calls in public
-              </p>
               <h1 style={{
-                fontSize: 'clamp(36px, 5vw, 56px)', fontWeight: 600,
-                lineHeight: 1.08, letterSpacing: '-0.03em', marginBottom: '24px',
+                fontSize: 'clamp(40px, 5.6vw, 64px)', fontWeight: 600,
+                lineHeight: 1.04, letterSpacing: '-0.035em', marginBottom: '24px',
               }}>
-                Your picks, on the record before kick&#8209;off.
+                Prove you can call&nbsp;it.
               </h1>
-              <p className="home-lede" style={{ marginBottom: '36px' }}>
-                Paste a Sportybet booking code or a Polymarket link before the event starts.
-                We timestamp it, read the result from the platform when it&apos;s over, and
-                score you on it. No screenshots, no self-reporting.
+              <p className="home-lede" style={{ fontSize: '19px', marginBottom: '36px' }}>
+                Anyone can post a winning slip after the match. TrustWeb locks your picks before
+                kick-off and builds a public track record from the results, so people can see who
+                actually knows what they&apos;re talking about.
               </p>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <Link to="/login" className="btn-accent" style={{ padding: '12px 20px', fontSize: '15px' }}>
-                  Start your record <ArrowRight size={16} strokeWidth={2} />
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <Link to="/signup" className="btn-accent" style={{ padding: '13px 22px', fontSize: '15px' }}>
+                  Create a free account <ArrowRight size={16} strokeWidth={2} />
                 </Link>
-                <Link to="/home" className="btn-ghost" style={{ padding: '12px 18px', fontSize: '15px' }}>
-                  Browse the feed
+                <Link to="/login" className="btn-ghost" style={{ padding: '13px 20px', fontSize: '15px' }}>
+                  Log in
                 </Link>
               </div>
+              <p style={{ marginTop: '28px', fontSize: '14px', color: 'var(--text-muted)' }}>
+                Works with Sportybet and Polymarket.
+              </p>
             </div>
+            <HeroSlip />
+          </div>
+        </div>
+      </section>
 
-            <Receipt />
+      {/* Problem */}
+      <section className="home-section" style={{ background: 'var(--surface)' }}>
+        <div className="page-wide">
+          <h2 className="home-h2" style={{ maxWidth: '18em', marginBottom: '48px' }}>
+            Screenshots prove nothing. A locked record does.
+          </h2>
+          <div className="home-three">
+            <div>
+              <p style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '10px' }}>
+                <X size={16} strokeWidth={2} style={{ color: 'var(--danger)' }} /> How it works now
+              </p>
+              <p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                Tipsters post their wins, quietly delete their losses, and sell &ldquo;VIP&rdquo; groups on the back
+                of a few lucky slips. Followers have no way to check.
+              </p>
+            </div>
+            <div>
+              <p style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '10px' }}>
+                <Check size={16} strokeWidth={2} style={{ color: 'var(--success)' }} /> How it works here
+              </p>
+              <p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                Every pick is timestamped before the event and settled from the bookmaker&apos;s own result.
+                Wins and losses both stay on the record, permanently.
+              </p>
+            </div>
+            <div>
+              <p style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '10px' }}>
+                <Check size={16} strokeWidth={2} style={{ color: 'var(--success)' }} /> What you get
+              </p>
+              <p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                A credit score and a public profile you can link to anywhere. If you&apos;re good, you
+                finally have proof. If you&apos;re following someone, you can check before you pay.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -120,44 +139,35 @@ export default function Home() {
         <div className="page-wide">
           <div className="home-two" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '72px' }}>
             <div>
-              <h2 className="home-h2" style={{ marginBottom: '16px' }}>How it works</h2>
-              <p className="home-lede" style={{ fontSize: '15px' }}>
-                The whole point is that you can&apos;t edit history. Everything below is enforced by the
-                server, not by trust.
+              <h2 className="home-h2" style={{ marginBottom: '16px' }}>Three steps, then it runs itself</h2>
+              <p className="home-lede" style={{ fontSize: '16px' }}>
+                You only ever do the first two. Results and scoring happen without you.
               </p>
             </div>
             <ol className="steps">
               <li>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>Lock it before the start</h3>
+                  <h3 style={{ fontSize: '17px', fontWeight: 600, marginBottom: '6px' }}>Create your account</h3>
                   <p style={{ color: 'var(--text-muted)', lineHeight: 1.65 }}>
-                    Submit a booking code or market link. If the event has already started, it&apos;s rejected.
-                    Otherwise it&apos;s stored with the time you locked it.
+                    Google or email. Pick a username; that&apos;s the name on your public record.
                   </p>
                 </div>
               </li>
               <li>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>We read the result</h3>
+                  <h3 style={{ fontSize: '17px', fontWeight: 600, marginBottom: '6px' }}>Lock a pick before it starts</h3>
                   <p style={{ color: 'var(--text-muted)', lineHeight: 1.65 }}>
-                    A background job checks pending picks and settles them from the platform itself.
-                    You never mark your own pick as won.
+                    Paste your Sportybet booking code or a Polymarket link. Once the event has started,
+                    it&apos;s too late, so nobody can sneak in a result they already know.
                   </p>
                 </div>
               </li>
               <li>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>Your credit score moves</h3>
+                  <h3 style={{ fontSize: '17px', fontWeight: 600, marginBottom: '6px' }}>Let the results come in</h3>
                   <p style={{ color: 'var(--text-muted)', lineHeight: 1.65 }}>
-                    Wins at long odds earn more. Misses on short odds cost more. Streaks multiply both ways.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '6px' }}>Stay active or fade</h3>
-                  <p style={{ color: 'var(--text-muted)', lineHeight: 1.65 }}>
-                    Visibility drops 3% a day when you go quiet. After two weeks away, credit starts to slip too.
+                    We check the outcome on the platform itself and update your score. Hard calls earn
+                    more; careless misses cost more.
                   </p>
                 </div>
               </li>
@@ -166,145 +176,84 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Scoring */}
-      <section id="scoring" className="home-section" style={{ background: 'var(--surface)' }}>
+      {/* Who it's for */}
+      <section id="who-its-for" className="home-section" style={{ background: 'var(--surface)' }}>
         <div className="page-wide">
-          <div className="home-two" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '72px' }}>
-            <div>
-              <h2 className="home-h2" style={{ marginBottom: '16px' }}>What a pick is worth</h2>
-              <p className="home-lede" style={{ fontSize: '15px', marginBottom: '16px' }}>
-                Everyone starts at 50. Credit is capped at 100, so it&apos;s slow to build and quick to lose.
-              </p>
-              <p className="home-lede" style={{ fontSize: '15px' }}>
-                Newer accounts lose less per miss while they find their feet. Once you have about 50
-                resolved picks, you&apos;re held to the full standard.
-              </p>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="score-table">
-                <thead>
-                  <tr>
-                    <th>Pick</th>
-                    <th>Odds</th>
-                    <th>Result</th>
-                    <th style={{ textAlign: 'right' }}>Credit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {SCORING_EXAMPLES.map(r => (
-                    <tr key={r.call}>
-                      <td>{r.call}</td>
-                      <td className="num">{r.odds}</td>
-                      <td style={{ color: 'var(--text-muted)' }}>{r.result}</td>
-                      <td className="num" style={{
-                        textAlign: 'right',
-                        color: r.positive ? 'var(--success)' : 'var(--danger)',
-                      }}>{r.delta}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '12px' }}>
-                Real outputs of the scoring function for an established account. Void bets change nothing.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Platforms */}
-      <section id="platforms" className="home-section">
-        <div className="page-wide">
-          <h2 className="home-h2" style={{ marginBottom: '28px' }}>Where you can bet from</h2>
-          <div className="border-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            {PLATFORMS.map(p => (
-              <div key={p.name} style={{ padding: '20px 22px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 600 }}>{p.name}</span>
-                  <span className="mono" style={{
-                    fontSize: '12px',
-                    color: p.live ? 'var(--success)' : 'var(--text-muted)',
-                  }}>{p.status}</span>
-                </div>
-                <p style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.55 }}>{p.note}</p>
+          <h2 className="home-h2" style={{ marginBottom: '40px' }}>Who it&apos;s for</h2>
+          <div className="border-grid home-three-grid">
+            {[
+              {
+                title: 'Tipsters',
+                body: "Stop arguing in the comments. Send people to a record they can't accuse you of editing.",
+              },
+              {
+                title: 'Punters following tips',
+                body: 'See hit rate, odds and history before you copy a slip or pay for a group.',
+              },
+              {
+                title: 'Prediction market traders',
+                body: 'Your Polymarket calls, scored on the same scale as everyone else.',
+              },
+            ].map(c => (
+              <div key={c.title} style={{ padding: '28px', background: 'var(--surface)' }}>
+                <h3 style={{ fontSize: '17px', fontWeight: 600, marginBottom: '8px' }}>{c.title}</h3>
+                <p style={{ color: 'var(--text-muted)', lineHeight: 1.65 }}>{c.body}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Contact */}
-      <section id="contact" className="home-section" style={{ background: 'var(--surface)' }}>
+      {/* FAQ */}
+      <section id="faq" className="home-section">
         <div className="page-wide">
           <div className="home-two" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '72px' }}>
+            <h2 className="home-h2">Questions people ask first</h2>
             <div>
-              <h2 className="home-h2" style={{ marginBottom: '16px' }}>Talk to us</h2>
-              <p className="home-lede" style={{ fontSize: '15px', marginBottom: '24px' }}>
-                Want your platform supported, found a result we got wrong, or just have an opinion?
-                We read everything.
-              </p>
-              <p style={{ fontSize: '14px', lineHeight: 1.9 }}>
-                <span style={{ color: 'var(--text-muted)' }}>General </span>
-                <a href="mailto:hello@trustweb.app" style={{ color: 'var(--text)' }}>hello@trustweb.app</a>
-                <br />
-                <span style={{ color: 'var(--text-muted)' }}>Partnerships </span>
-                <a href="mailto:partners@trustweb.app" style={{ color: 'var(--text)' }}>partners@trustweb.app</a>
-              </p>
-            </div>
-
-            <div>
-              {contactSent ? (
-                <div style={{ padding: '24px 0' }}>
-                  <p style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '6px' }}>
-                    <Check size={16} strokeWidth={2} style={{ color: 'var(--success)' }} />
-                    Your email app should have opened
-                  </p>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                    Send it from there and we&apos;ll reply to the address you used.
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleContactSubmit} style={{ display: 'grid', gap: '16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                    {[
-                      { key: 'name',  label: 'Name',  type: 'text',  placeholder: '' },
-                      { key: 'email', label: 'Email', type: 'email', placeholder: '' },
-                    ].map(f => (
-                      <div key={f.key}>
-                        <label className="label" htmlFor={`contact-${f.key}`} style={{ display: 'block', marginBottom: '6px' }}>{f.label}</label>
-                        <input
-                          id={`contact-${f.key}`}
-                          className="input"
-                          type={f.type}
-                          value={(contactForm as Record<string, string>)[f.key]}
-                          onChange={e => setContactForm(p => ({ ...p, [f.key]: e.target.value }))}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="label" htmlFor="contact-message" style={{ display: 'block', marginBottom: '6px' }}>Message</label>
-                    <textarea
-                      id="contact-message"
-                      className="input"
-                      rows={5}
-                      value={contactForm.message}
-                      onChange={e => setContactForm(p => ({ ...p, message: e.target.value }))}
-                      style={{ resize: 'vertical' }}
-                    />
-                  </div>
-                  {contactError && (
-                    <p style={{ color: 'var(--danger)', fontSize: '13px' }}>{contactError}</p>
-                  )}
-                  <div>
-                    <button type="submit" className="btn-accent">Send</button>
-                  </div>
-                </form>
-              )}
+              {FAQ.map(f => (
+                <details key={f.q} className="faq">
+                  <summary>{f.q}</summary>
+                  <p>{f.a}</p>
+                </details>
+              ))}
             </div>
           </div>
         </div>
       </section>
+
+      {/* Final CTA */}
+      <section className="home-section" style={{ background: 'var(--surface)', textAlign: 'center' }}>
+        <div className="page-wide">
+          <h2 className="home-h2" style={{ fontSize: 'clamp(28px, 4vw, 44px)', marginBottom: '16px' }}>
+            Your next pick could be your first on the record.
+          </h2>
+          <p className="home-lede" style={{ margin: '0 auto 32px' }}>
+            It takes a minute to sign up and costs nothing.
+          </p>
+          <Link to="/signup" className="btn-accent" style={{ padding: '13px 24px', fontSize: '15px' }}>
+            Create a free account <ArrowRight size={16} strokeWidth={2} />
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer style={{ borderTop: '1px solid var(--border)', padding: '40px 0 48px' }}>
+        <div className="page-wide" style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', flexWrap: 'wrap' }}>
+          <div>
+            <p style={{ fontWeight: 600, marginBottom: '6px' }}>TrustWeb</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              &copy; {new Date().getFullYear()} TrustWeb. Not a bookmaker; we never take bets.
+            </p>
+          </div>
+          <nav style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '14px' }}>
+            <a href="#how-it-works" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>How it works</a>
+            <a href="#faq" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>FAQ</a>
+            <a href="mailto:hello@trustweb.app" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Contact</a>
+            <Link to="/login" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Log in</Link>
+            <Link to="/signup" style={{ color: 'var(--text)', textDecoration: 'none' }}>Sign up</Link>
+          </nav>
+        </div>
+      </footer>
 
     </div>
   )

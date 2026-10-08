@@ -25,7 +25,7 @@ export default function Navbar({ user, username }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const hideOn = ['/login', '/register', '/x7k2-admin']
+  const hideOn = ['/login', '/signup', '/register', '/x7k2-admin']
   if (hideOn.includes(location.pathname)) return null
 
   async function handleSignOut() {
@@ -52,7 +52,7 @@ export default function Navbar({ user, username }: Props) {
 
         {/* Logo */}
         <Link
-          to="/home"
+          to={user ? '/home' : '/'}
           style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
@@ -67,8 +67,24 @@ export default function Navbar({ user, username }: Props) {
           </span>
         </Link>
 
+        {/* Logged out: sections of the landing page */}
+        {!user && (
+          <div className="nav-public-links" style={{ display: 'flex', alignItems: 'center', gap: '22px', flex: 1, marginLeft: '24px' }}>
+            {[
+              { href: '/#how-it-works', label: 'How it works' },
+              { href: '/#who-its-for',  label: "Who it's for" },
+              { href: '/#faq',          label: 'FAQ' },
+            ].map(l => (
+              <a key={l.href} href={l.href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >{l.label}</a>
+            ))}
+          </div>
+        )}
+
         {/* Nav links — only shown when logged in */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: user ? 1 : 0 }}>
           {user && [
             { to: '/home',        label: 'Feed' },
             { to: '/leaderboard', label: 'Leaderboard' },
@@ -213,16 +229,14 @@ export default function Navbar({ user, username }: Props) {
               )}
             </div>
           ) : (
-            <Link to="/login" style={{
-              padding: '7px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              background: 'var(--accent)', color: 'var(--on-accent)', textDecoration: 'none',
-              transition: 'opacity 0.15s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-            >
-              Sign in
-            </Link>
+            <>
+              <Link to="/login" className="btn-ghost" style={{ padding: '7px 14px', border: 'none' }}>
+                Log in
+              </Link>
+              <Link to="/signup" className="btn-accent" style={{ padding: '7px 16px', fontSize: '13px' }}>
+                Sign up
+              </Link>
+            </>
           )}
         </div>
       </div>

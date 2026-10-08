@@ -813,28 +813,73 @@ select.input {
   padding-top: 2px;
 }
 
-.score-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+.home-three {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 48px;
 }
 
-.score-table th,
-.score-table td {
-  text-align: left;
-  padding: 11px 12px;
-  border-bottom: 1px solid var(--border);
-}
+.home-three-grid { grid-template-columns: repeat(3, 1fr); }
 
-.score-table th {
+.faq {
+  border-top: 1px solid var(--border);
+}
+.faq:last-child { border-bottom: 1px solid var(--border); }
+.faq summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 18px 28px 18px 0;
   font-weight: 500;
+  position: relative;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: '+';
+  position: absolute;
+  right: 0;
+  top: 16px;
+  font-family: var(--font-mono);
   color: var(--text-muted);
-  font-size: 13px;
+}
+.faq[open] summary::after { content: '\2212'; }
+.faq p {
+  color: var(--text-muted);
+  line-height: 1.65;
+  padding: 0 28px 20px 0;
 }
 
-.score-table td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+/* ── Login / sign up ── */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(360px, 5fr) 7fr;
+}
+
+.auth-brand {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 40px;
+}
+
+.auth-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.auth-mobile-brand { display: none; margin-bottom: 32px; }
 
 @media (max-width: 860px) {
+  .auth-shell { grid-template-columns: 1fr; }
+  .auth-brand { display: none; }
+  .auth-mobile-brand { display: inline-block; }
+  .home-three, .home-three-grid { grid-template-columns: 1fr !important; }
+  .home-three { gap: 32px; }
   .home-hero { grid-template-columns: 1fr !important; gap: 48px !important; }
   .home-two  { grid-template-columns: 1fr !important; gap: 40px !important; }
   .home-section { padding: 64px 0; }
@@ -845,4 +890,8 @@ select.input {
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
   }
+}
+
+@media (max-width: 760px) {
+  .nav-public-links { display: none !important; }
 }
