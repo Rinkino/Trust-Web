@@ -1,0 +1,58 @@
+# Downloads raw EPL source files and stores them on the `epl-data` branch so they
+# can be inspected and versioned. Runs on demand (push to the trigger file or manual).
+name: epl-fetch-raw
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - epl/runs/fetch-raw.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: epl-data-branch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download sources
+        run: |
+          set -u
+          stamp=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          mkdir -p out/raw out/meta
+          ua="Mozilla/5.0 (compatible; TrustWeb-EPL-research/1.0; +https://github.com/Rinkino/Trust-Web)"
+          get() { # url, dest
+            code=$(curl -sSL -A "$ua" --retry 3 --max-time 60 -o "$2" -w "%{http_code}" "$1" || echo 000)
+            size=$(stat -c %s "$2" 2>/dev/null || echo 0)
+            echo "$1,$code,$size,$(sha256sum "$2" 2>/dev/null | cut -d' ' -f1)" >> out/meta/manifest.csv
+            sleep 1
+          }
+          echo "url,http_status,bytes,sha256" > out/meta/manifest.csv
+          get https://www.football-data.co.uk/notes.txt out/raw/notes.txt
+          get https://www.football-data.co.uk/englandm.php out/raw/englandm.html
+          get https://www.football-data.co.uk/fixtures.csv out/raw/fixtures.csv
+          get https://www.football-data.co.uk/disclaimer.php out/raw/disclaimer.html
+          for y in 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26; do
+            n=$(printf "%02d" $(( (10#$y + 1) % 100 )))
+            get "https://www.football-data.co.uk/mmz4281/${y}${n}/E0.csv" "out/raw/E0_${y}${n}.csv"
+          done
+          get https://fixturedownload.com/ out/raw/fixturedownload_home.html
+          get https://fixturedownload.com/feed/json/epl-2026 out/raw/fixturedownload_epl-2026.json
+          get https://fixturedownload.com/download/epl-2026-UTC.csv out/raw/fixturedownload_epl-2026-UTC.csv
+          cat out/meta/manifest.csv
+      - name: Commit to epl-data branch
+        run: |
+          git init -q store && cd store
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git config user.name "epl-data-bot"; git config user.email "actions@users.noreply.github.com"
+          if git fetch -q origin epl-data 2>/dev/null; then git checkout -q -b epl-data FETCH_HEAD; else git checkout -q --orphan epl-data; fi
+          mkdir -p "snapshots/$STAMP"
+          cp -r ../out/* "snapshots/$STAMP/"
+          rm -rf latest && cp -r "snapshots/$STAMP" latest
+          git add -A && git commit -q -m "Raw snapshot $STAMP" && git push -q origin epl-data
