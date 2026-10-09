@@ -12,6 +12,11 @@
 //   list  {key?}
 //   claim {key}   (signed in) move this browser's picks into the account; where the
 //                 account already has a pick for the same match, the account's is kept
+//   save_prop   {match_id, prop_key, label, model_prob}  (signed in) save one of the
+//               model's predictions for a match, e.g. "Arsenal more corners than Leeds"
+//   remove_prop {match_id, prop_key}                      (signed in)
+//   list_props  {}                                        (signed in) saved predictions,
+//               each settled from the final statistics once the match is completed
 //
 // Picks close at kickoff: the epl_user_picks_guard trigger rejects inserts and
 // updates once the match has started, whatever this function does. Each pick is
@@ -35,6 +40,7 @@ async function sha256(s: string): Promise<string> {
 }
 
 const KEY = /^[0-9a-f]{64}$/
+const PROP_KEY = /^(res:[HDA]|dc:(HD|DA|HA)|btts:(yes|no)|tot:(goals|corners|yellows|shots|sot):(over|under):\d{1,2}\.5|team:(home|away):(goals|corners|yellows|shots|sot):(over|under):\d{1,2}\.5|cmp:(corners|yellows|shots|sot):(home|away))$/
 const MATCH = /^[0-9]{4}-[0-9]{2}_[a-z0-9-]+_[a-z0-9-]+$/
 const goals = (x: unknown) => (Number.isInteger(x) && (x as number) >= 0 && (x as number) <= 20 ? (x as number) : null)
 
@@ -86,6 +92,15 @@ Deno.serve(async (req) => {
     return json(200, { moved, duplicates_dropped: kept })
   }
 
+  if (action === 'list_props') {
+    if (!userId) return json(401, { error: 'Sign in to see saved predictions.' })
+    const { data, error } = await db.from('epl_saved_prop_results')
+      .select('match_id,prop_key,label,model_prob,created_at,home_team,away_team,kickoff_utc,match_status,fthg,ftag,won')
+      .eq('user_id', userId).order('kickoff_utc', { ascending: true }).limit(1000)
+    if (error) return json(500, { error: error.message })
+    return json(200, { props: data ?? [] })
+  }
+
   if (action === 'list') {
     const { data, error } = await mine(db.from('epl_user_pick_scores')
       .select('match_id,home_team,away_team,kickoff_utc,pick,home_goals,away_goals,prediction_id,created_at,updated_at,match_status,fthg,ftag,ftr,points'))
@@ -110,13 +125,40 @@ Deno.serve(async (req) => {
   const open = m.status === 'scheduled' && m.kickoff_utc && new Date(m.kickoff_utc).getTime() > Date.now()
   if (!open) return json(409, { error: 'Picks for this match are closed: it has kicked off.' })
 
+  if (action === 'save_prop' || action === 'remove_prop') {
+    if (!userId) return json(401, { error: 'Sign in to save predictions.' })
+    const propKey = body.prop_key
+    if (typeof propKey !== 'string' || !PROP_KEY.test(propKey)) return json(400, { error: 'invalid prediction' })
+    if (action === 'remove_prop') {
+      const { error } = await db.from('epl_saved_props').delete().eq('user_id', userId).eq('match_id', matchId).eq('prop_key', propKey)
+      if (error) return json(/closed/.test(error.message) ? 409 : 500, { error: /closed/.test(error.message) ? 'This match has kicked off.' : error.message })
+      return json(200, { removed: propKey })
+    }
+    const label = typeof body.label === 'string' ? body.label.trim().slice(0, 120) : ''
+    const prob = typeof body.model_prob === 'number' && body.model_prob >= 0 && body.model_prob <= 1 ? body.model_prob : null
+    if (!label) return json(400, { error: 'missing label' })
+    const since = new Date(Date.now() - 60_000).toISOString()
+    const { count } = await db.from('epl_saved_props').select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).gt('created_at', since)
+    if ((count ?? 0) >= 60) return json(429, { error: 'Too many changes in the last minute. Try again shortly.' })
+    const { data: pred } = await db.from('epl_predictions').select('prediction_id')
+      .eq('mode', 'live').eq('model_name', 'selected').eq('match_id', matchId)
+      .order('created_at', { ascending: false }).limit(1)
+    const { error } = await db.from('epl_saved_props').upsert(
+      { user_id: userId, match_id: matchId, prop_key: propKey, label, model_prob: prob, prediction_id: pred?.[0]?.prediction_id ?? null },
+      { onConflict: 'user_id,match_id,prop_key', ignoreDuplicates: true },
+    )
+    if (error) return json(/closed/.test(error.message) ? 409 : 500, { error: /closed/.test(error.message) ? 'This match has kicked off.' : error.message })
+    return json(200, { saved: propKey })
+  }
+
   if (action === 'clear') {
     const { error } = await mine(db.from('epl_user_picks').delete()).eq('match_id', matchId)
     if (error) return json(500, { error: error.message })
     return json(200, { cleared: matchId })
   }
 
-  if (action !== 'save') return json(400, { error: 'action must be save, clear, list or claim' })
+  if (action !== 'save') return json(400, { error: 'unknown action' })
   const pick = body.pick
   if (pick !== 'H' && pick !== 'D' && pick !== 'A') return json(400, { error: 'pick must be H, D or A' })
   const hasScore = body.home_goals !== undefined && body.home_goals !== null

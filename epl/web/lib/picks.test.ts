@@ -71,3 +71,13 @@ test('headline wording follows the probabilities', () => {
   assert.equal(factValue('promoted', 0), 'No')
   assert.equal(factValue('elo', 1532.4), '1532')
 })
+
+test('saved predictions: signed in only, valid keys only', () => {
+  const ok = parsePicksRequest({ action: 'save_prop', match_id: '2026-27_arsenal_leeds', prop_key: 'cmp:corners:home', label: 'Arsenal more corners than Leeds', model_prob: 0.71 }, true)
+  assert.equal(ok.ok, true)
+  assert.equal(parsePicksRequest({ action: 'save_prop', match_id: '2026-27_arsenal_leeds', prop_key: 'cmp:corners:home', label: 'x', model_prob: 0.7 }, false).ok, false)
+  assert.equal(parsePicksRequest({ action: 'save_prop', match_id: '2026-27_arsenal_leeds', prop_key: 'tot:goals:over:2', label: 'x', model_prob: 0.7 }, true).ok, false)
+  assert.equal(parsePicksRequest({ action: 'save_prop', match_id: '2026-27_arsenal_leeds', prop_key: 'res:H', label: 'x', model_prob: 1.4 }, true).ok, false)
+  assert.equal(parsePicksRequest({ action: 'remove_prop', match_id: '2026-27_arsenal_leeds', prop_key: 'res:H' }, true).ok, true)
+  assert.equal(parsePicksRequest({ action: 'list_props' }, true).ok, true)
+})
