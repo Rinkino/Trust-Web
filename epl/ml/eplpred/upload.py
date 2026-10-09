@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -61,15 +62,27 @@ class Writer:
     """Sends rows in batches. Without an OIDC token (local runs) it writes JSON files
     to `outdir` instead, so the whole pipeline can be exercised offline."""
 
+    # GitHub OIDC tokens are short-lived (minutes), so a fresh one is requested
+    # whenever the cached token is older than this.
+    TOKEN_MAX_AGE = 240.0
+
     def __init__(self, outdir: str | None = None, batch: int = 250):
-        self.token = oidc_token()
+        self._token = oidc_token()
+        self._token_at = time.monotonic()
         self.outdir = outdir
         self.batch = batch
         self.written: dict[str, int] = {}
 
     @property
     def remote(self) -> bool:
-        return self.token is not None
+        return self._token is not None
+
+    @property
+    def token(self) -> str | None:
+        if self._token is not None and time.monotonic() - self._token_at > self.TOKEN_MAX_AGE:
+            self._token = oidc_token()
+            self._token_at = time.monotonic()
+        return self._token
 
     def write(self, table: str, rows: list[dict]) -> int:
         rows = clean_rows(rows)

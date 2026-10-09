@@ -142,6 +142,15 @@ def run(args) -> int:
 
     status("running")
     try:
+        # A job killed by its timeout cannot report; mark such runs as failed.
+        if writer.remote:
+            stale = [r for r in read_table("epl_pipeline_runs", "run_key,started_at,stages,summary,git_sha,workflow_url",
+                                           {"status": "eq.running"})
+                     if r["run_key"] != run_key and pd.Timestamp(r["started_at"]) < pd.Timestamp(started) - pd.Timedelta(minutes=90)]
+            if stale:
+                writer.write("epl_pipeline_runs", [{**r, "status": "failed", "finished_at": None,
+                                                    "error": "abandoned: the job ended without reporting (timeout or crash)"}
+                                                   for r in stale])
         # 1. Ingest
         files = stage("download", lambda: download_all() if args.download else load_local(args.raw_dir))
         ds = stage("validate", lambda: build_dataset(files))

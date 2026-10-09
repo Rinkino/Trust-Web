@@ -112,3 +112,13 @@ def test_schema_protects_predictions_and_results():
     assert "epl_predictions rows are immutable" in sql
     assert "epl_matches_protect" in sql
     assert re.search(r"generated_before_kickoff boolean generated always", sql)
+
+
+def test_writer_refreshes_short_lived_oidc_token(monkeypatch):
+    import eplpred.upload as up
+    calls = []
+    monkeypatch.setattr(up, "oidc_token", lambda: calls.append(1) or f"tok{len(calls)}")
+    w = up.Writer()
+    assert w.remote and w.token == "tok1"
+    w._token_at -= up.Writer.TOKEN_MAX_AGE + 1
+    assert w.token == "tok2" and len(calls) == 2
