@@ -1,14 +1,15 @@
 import Link from 'next/link'
 import LocalTime from '@/components/LocalTime'
 import { ProbBar } from '@/components/viz'
-import type { PredictionRow } from '@/lib/db'
+import type { FixtureRow } from '@/lib/live'
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
 
 /** One upcoming fixture on the home page: kickoff, H/D/A, most likely score. */
-export default function MatchCard({ p }: { p: PredictionRow }) {
+export default function MatchCard({ p }: { p: FixtureRow }) {
   const outcome = p.values.outcome as number[] | undefined
-  const top = (p.values.top_scorelines as number[][] | undefined)?.[0]
+  // Same model as the result chances, so the score agrees with them.
+  const top = ((p.resultModel?.values ?? p.values).top_scorelines as number[][] | undefined)?.[0]
   return (
     <article className="card match">
       <div className="match-time small muted">{p.kickoff_utc ? <LocalTime iso={p.kickoff_utc} withDate={false} /> : p.match_date}</div>

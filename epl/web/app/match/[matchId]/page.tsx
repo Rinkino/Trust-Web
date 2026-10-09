@@ -5,6 +5,7 @@ import PickWidget from '@/components/PickWidget'
 import { ProbBar } from '@/components/viz'
 import { latestSelection, select, type CountValue, type PredictionRow, type Selection } from '@/lib/db'
 import { drivers, effect, factValue, headline, type Explanation } from '@/lib/explain'
+import { withResultModel } from '@/lib/live'
 import { outcomeOfScore } from '@/lib/picks'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,8 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
     mode: 'eq.live', model_name: 'eq.selected', match_id: `eq.${matchId}`, order: 'created_at.desc', limit: 20,
   })
   // The prediction shown is the latest one published before kickoff.
-  const p = preds.find(r => r.generated_before_kickoff !== false)
+  const shown = preds.find(r => r.generated_before_kickoff !== false)
+  const p = shown ? (await withResultModel([shown]))[0] : undefined
   const [expl, selection] = await Promise.all([
     p ? select<{ explanation: Explanation }>('epl_prediction_explanations', {
       select: 'explanation', pipeline_run: `eq.${p.pipeline_run}`, match_id: `eq.${matchId}`, limit: 1,
@@ -44,7 +46,9 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
 
   const v = p?.values
   const outcome = v?.outcome as number[] | undefined
-  const top = (v?.top_scorelines as number[][] | undefined) ?? []
+  // Expected goals and likely scores from the model behind the result chances, so they agree.
+  const rv = p?.resultModel?.values ?? v
+  const top = (rv?.top_scorelines as number[][] | undefined) ?? []
   const tm = (p?.target_models ?? {}) as Record<string, string>
   const e = expl[0]?.explanation
   // Use the explanation only if it explains the model that produced the result probabilities shown.
@@ -100,11 +104,18 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
               <div>
                 <h3>Expected goals</h3>
                 <p className="mono" style={{ fontSize: 20 }}>
-                  {(v!.goals_home as CountValue | undefined)?.mean.toFixed(2) ?? '—'} – {(v!.goals_away as CountValue | undefined)?.mean.toFixed(2) ?? '—'}
+                  {(rv!.goals_home as CountValue | undefined)?.mean.toFixed(2) ?? '—'} – {(rv!.goals_away as CountValue | undefined)?.mean.toFixed(2) ?? '—'}
                 </p>
                 <p className="note">The average number of goals the model expects each side to score, if this match were played many times.</p>
               </div>
             </div>
+            {p.resultModel && (
+              <p className="note">
+                The chances, expected goals and likely scores here all come from the same model, so they agree with each
+                other. <Link href="/evaluation">Advanced statistics</Link> also shows the most accurate model for each
+                statistic separately, which can give slightly different goal figures.
+              </p>
+            )}
             <p className="note">
               Published <LocalTime iso={p.created_at} />, using results up to {p.data_cutoff.slice(0, 10)}. Stored predictions are never edited.
             </p>

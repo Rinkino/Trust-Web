@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import LocalTime from '@/components/LocalTime'
 import MatchCard from '@/components/MatchCard'
-import type { PredictionRow } from '@/lib/db'
-import { heldOutResultAccuracy, laterFixtures, ukDay, upcomingPredictions } from '@/lib/live'
+import { heldOutResultAccuracy, laterFixtures, ukDay, upcomingPredictions, type FixtureRow } from '@/lib/live'
 
 // Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
 export const dynamic = 'force-dynamic'
@@ -11,7 +10,7 @@ export default async function Home() {
   const now = new Date().toISOString()
   const [preds, acc] = await Promise.all([upcomingPredictions(now), heldOutResultAccuracy()])
   const later = await laterFixtures(now, new Set(preds.map(p => p.match_id)))
-  const days = new Map<string, PredictionRow[]>()
+  const days = new Map<string, FixtureRow[]>()
   for (const p of preds) {
     const d = p.kickoff_utc ? ukDay(p.kickoff_utc) : p.match_date
     days.set(d, [...(days.get(d) ?? []), p])
