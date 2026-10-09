@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import LocalTime from '@/components/LocalTime'
+import ModelTopPicks from '@/components/ModelTopPicks'
 import PickWidget from '@/components/PickWidget'
 import { ProbBar } from '@/components/viz'
 import { latestSelection, select, type CountValue, type PredictionRow, type Selection } from '@/lib/db'
@@ -177,7 +178,8 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
       )}
 
       <div style={{ marginTop: 16 }}>
-        <PickWidget matchId={m.match_id} home={H} away={A} open={open} />
+        {v && rv && <ModelTopPicks values={v} resultValues={rv} home={H} away={A} selection={sel} />}
+        <div style={{ marginTop: 16 }}><PickWidget matchId={m.match_id} home={H} away={A} open={open} /></div>
       </div>
 
       {p && v && (

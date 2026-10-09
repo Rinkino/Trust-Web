@@ -189,3 +189,15 @@ ul.landing-points { list-style: none; display: grid; gap: 14px; grid-template-co
 ul.landing-points li { display: grid; gap: 4px; border-top: 2px solid var(--accent); padding-top: 10px; }
 ul.landing-points span { color: var(--muted); font-size: 14px; }
 @media (max-width: 640px) { .landing-hero h1 { font-size: 26px; } }
+
+/* ── Model's top 3 per market ─────────────────────────────────────────────── */
+.grid.markets { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; margin: 12px 0 4px; }
+.market h3 { font-size: 14px; margin-bottom: 6px; }
+ol.market-picks { list-style: none; display: grid; gap: 5px; }
+ol.market-picks li { display: grid; grid-template-columns: 18px 1fr 70px 38px; align-items: center; gap: 8px; font-size: 14px; }
+.mp-rank { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.mp-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.mp-bar > span { display: block; height: 100%; background: var(--accent); }
+.mp-p { text-align: right; }
+.top-picks { border-top: 3px solid var(--accent); }
