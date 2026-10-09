@@ -3,6 +3,7 @@ import Link from 'next/link'
 const SECTIONS = [
   ['/advanced', 'Overview'],
   ['/evaluation', 'Model evaluation'],
+  ['/betting', 'Betting vs the market'],
   ['/predictions', 'All upcoming numbers'],
   ['/history', 'Historical accuracy'],
   ['/demo', 'Three-match demo'],

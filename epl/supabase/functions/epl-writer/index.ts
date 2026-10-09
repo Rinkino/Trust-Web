@@ -24,6 +24,8 @@ const TABLES: Record<string, { mode: 'insert' | 'upsert'; onConflict?: string }>
   epl_target_selection:  { mode: 'upsert', onConflict: 'selection_version,target' },
   epl_data_source_audit: { mode: 'insert' },
   epl_pipeline_runs:     { mode: 'upsert', onConflict: 'run_key' },
+  epl_match_odds:        { mode: 'insert' },
+  epl_value_backtest:    { mode: 'upsert', onConflict: 'run_key,model_name,market,price_source,strategy,split,season' },
 }
 
 function json(status: number, body: unknown) {

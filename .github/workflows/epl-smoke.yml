@@ -28,7 +28,7 @@ jobs:
           code=$(curl -sS -o page.html -w "%{http_code}" --max-time 60 "$SITE/login")
           if [ "$code" = "200" ] && grep -q "Continue with Google" page.html; then echo "OK   200 /login"; else echo "FAIL $code /login"; fail=1; fi
           # Every page redirects to it (no content without signing in)
-          for p in / /my-picks /match/2026-27_arsenal_leeds /advanced /evaluation /predictions /demo /history /data; do
+          for p in / /my-picks /match/2026-27_arsenal_leeds /advanced /evaluation /betting /predictions /demo /history /data; do
             out=$(curl -sS -o /dev/null -w "%{http_code} %{redirect_url}" --max-time 60 "$SITE$p")
             case "$out" in
               30[27]\ *"/login?next="*) echo "OK   $p -> login";;

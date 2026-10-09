@@ -36,6 +36,32 @@ COLUMN_MAP: dict[str, tuple[str, ...]] = {
     "odds_avg_h": ("AvgH", "BbAvH"), "odds_avg_d": ("AvgD", "BbAvD"), "odds_avg_a": ("AvgA", "BbAvA"),
     "odds_avg_over25": ("Avg>2.5", "BbAv>2.5"), "odds_avg_under25": ("Avg<2.5", "BbAv<2.5"),
 }
+# Bookmaker odds kept for the betting evaluation: {stage: {bookmaker: source-column prefixes}}.
+# football-data.co.uk collects "pre-closing" odds on Friday afternoon for weekend games and
+# Tuesday afternoon for midweek games; "closing" odds are the last available before kickoff.
+# Average and best ("Max") are taken across the bookmakers it tracks. Older files use the
+# BetBrain names (BbAv/BbMx). Each prefix + H/D/A gives the match result prices, prefix +
+# >2.5 / <2.5 the over/under 2.5 goals prices (Pinnacle uses "P" there).
+ODDS_SOURCES: dict[str, dict[str, tuple[tuple[str, ...], tuple[str, ...]]]] = {
+    "pre_closing": {
+        "average": (("Avg", "BbAv"), ("Avg", "BbAv")),
+        "best": (("Max", "BbMx"), ("Max", "BbMx")),
+        "bet365": (("B365",), ("B365",)),
+        "pinnacle": (("PS",), ("P",)),
+    },
+    "closing": {
+        "average": (("AvgC",), ("AvgC",)),
+        "best": (("MaxC",), ("MaxC",)),
+        "bet365": (("B365C",), ("B365C",)),
+        "pinnacle": (("PSC",), ("PC",)),
+    },
+}
+ODDS_MARKETS = {"1x2": ("H", "D", "A"), "ou25": (">2.5", "<2.5")}
+# Sum of 1/odds over a complete market. A single bookmaker always takes a margin (> 1);
+# best prices across bookmakers can dip slightly below 1. Outside this range the prices
+# are a data error and are dropped.
+OVERROUND_RANGE = {"single": (1.0, 1.30), "best": (0.93, 1.30)}
+
 REQUIRED = ("date", "home_team", "away_team", "fthg", "ftag")
 INT_STATS = ("fthg", "ftag", "hthg", "htag", "hs", "as", "hst", "ast", "hc", "ac", "hf", "af", "hy", "ay", "hr", "ar")
 FLOAT_FIELDS = ("hxg", "axg", "odds_avg_h", "odds_avg_d", "odds_avg_a", "odds_avg_over25", "odds_avg_under25")
@@ -104,6 +130,46 @@ def _to_float(v: str) -> float | None:
         return None
     f = float(v)
     return f if f > 0 else None
+
+
+def parse_odds(header: list[str], rec: list[str]) -> tuple[dict, list[str]]:
+    """Complete, plausible markets only: {stage: {bookmaker: {market: [decimal odds]}}}.
+    A market with any price missing, not above 1.0, or an implausible margin is left
+    out (and reported), never partially filled."""
+    pos = {h: i for i, h in enumerate(header)}
+
+    def val(name: str) -> float | None:
+        i = pos.get(name)
+        if i is None or i >= len(rec):
+            return None
+        try:
+            return _to_float(rec[i])
+        except ValueError:
+            return None
+
+    out: dict = {}
+    bad: list[str] = []
+    for stage, books in ODDS_SOURCES.items():
+        for book, (p1x2, pou) in books.items():
+            for market, prefixes in (("1x2", p1x2), ("ou25", pou)):
+                prices = None
+                for pre in prefixes:
+                    names = [pre + s for s in ODDS_MARKETS[market]]
+                    if all(n in pos for n in names):
+                        prices = [val(n) for n in names]
+                        break
+                if prices is None or all(p is None for p in prices):
+                    continue
+                if any(p is None or p <= 1.0 for p in prices):
+                    bad.append(f"{stage} {book} {market} incomplete or invalid odds {prices}; dropped")
+                    continue
+                s = sum(1 / p for p in prices)
+                lo, hi = OVERROUND_RANGE["best" if book == "best" else "single"]
+                if not (lo <= s <= hi):
+                    bad.append(f"{stage} {book} {market} implied total {s:.3f} outside {lo}-{hi}; dropped")
+                    continue
+                out.setdefault(stage, {}).setdefault(book, {})[market] = prices
+    return out, bad
 
 
 def parse_football_data(raw: bytes, start_year: int, url: str) -> IngestResult:
@@ -192,6 +258,9 @@ def parse_football_data(raw: bytes, start_year: int, url: str) -> IngestResult:
                     res.warnings.append(f"line {lineno}: unparseable time {t!r}")
             ref = get("referee").strip()
             row["referee"] = ref.encode("ascii", "ignore").decode().strip() or None
+            row["odds"], bad = parse_odds(header, rec)
+            for b in bad:
+                res.warnings.append(f"line {lineno}: {b}")
         except (ValueError, UnknownTeam) as e:
             res.rejected.append({"row": lineno, "reason": str(e), "raw": raw_row})
             continue

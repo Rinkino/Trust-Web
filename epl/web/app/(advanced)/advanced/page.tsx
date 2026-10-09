@@ -52,6 +52,7 @@ export default async function AdvancedOverview() {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '24px 0 8px' }}>
         <DemoButton />
         <Link className="btn ghost" href="/evaluation">Model evaluation</Link>
+        <Link className="btn ghost" href="/betting">Betting vs the market</Link>
         <Link className="btn ghost" href="/predictions">All upcoming numbers</Link>
       </div>
       <p className="note">

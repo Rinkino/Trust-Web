@@ -325,6 +325,14 @@ def run(args) -> int:
                                 "pipeline_run": run_key})
         stage("persist_backtest", lambda: writer.write("epl_predictions", bt_rows))
         summary["backtest_predictions_written"] = len(bt_rows)
+
+        # 8. Betting evaluation against bookmaker odds (reads predictions, changes none)
+        odds_rows = odds_table_rows(ds, writer)
+        stage("persist_odds", lambda: writer.write("epl_match_odds", odds_rows))
+        value_rows = stage("value_backtest", lambda: value_rows_for(fr_all, ds, selection, versions, run_key, methodology))
+        stage("persist_value", lambda: writer.write("epl_value_backtest", value_rows))
+        summary["value_backtest_rows"] = len(value_rows)
+        summary["odds_rows_written"] = len(odds_rows)
         summary["timings"] = {k: round(v, 1) for k, v in bt.timings.items()}
         summary["headline"] = _headline(ev_test, sel)
         status("succeeded")
@@ -336,6 +344,53 @@ def run(args) -> int:
         stages["error"] = {"ok": False}
         status("failed", f"{e}\n{traceback.format_exc()[-3000:]}")
         raise
+
+
+def odds_table_rows(ds, writer) -> list[dict]:
+    """One row per completed match with stored odds; rows already stored unchanged are skipped."""
+    m = ds.matches
+    rows = []
+    if "odds" not in m.columns:
+        return rows
+    for r in m[m.status == "completed"][["match_id", "season", "match_date", "odds", "source_url"]].to_dict("records"):
+        odds = r.get("odds")
+        if not isinstance(odds, dict) or not odds:
+            continue
+        h = hashlib.sha256(json.dumps(odds, sort_keys=True).encode()).hexdigest()[:16]
+        rows.append({"match_id": r["match_id"], "season": r["season"], "match_date": pd.Timestamp(r["match_date"]).date(),
+                     "odds": odds, "odds_hash": h, "source": "football-data.co.uk", "source_url": r["source_url"],
+                     "collection_note": ODDS_COLLECTION_NOTE})
+    if writer.remote and rows:
+        have = {(x["match_id"], x["odds_hash"]) for x in read_table("epl_match_odds", "match_id,odds_hash")}
+        rows = [r for r in rows if (r["match_id"], r["odds_hash"]) not in have]
+    return rows
+
+
+ODDS_COLLECTION_NOTE = ("football-data.co.uk: pre-closing odds collected Friday afternoon for weekend games and Tuesday "
+                        "afternoon for midweek games; closing odds are the last available before kickoff. No per-quote "
+                        "timestamps. Average and best are across the bookmakers football-data tracks.")
+
+
+def value_rows_for(fr_all, ds, selection, versions, run_key, methodology) -> list[dict]:
+    from .value import MARKETS, evaluate as value_evaluate
+
+    existing = {market: selection.get(target) for market, (_, target) in MARKETS.items()}
+    models = {"baseline": "baseline", "market": "market"}
+    for name in set(existing.values()):
+        if name and name not in models:
+            models[name] = name
+    periods = {"validation": VALIDATION_SEASONS, "test": TEST_SEASONS, "live": [LIVE_SEASON]}
+    out = []
+    for r in value_evaluate(fr_all[fr_all.model != "selected"], ds.matches, models, periods):
+        name = r["model_name"]
+        role = ("market" if name == "market" else "existing_model" if existing.get(r["market"]) == name
+                else "baseline" if name == "baseline" else "other")
+        out.append({**{k: v for k, v in r.items() if k != "label"}, "run_key": run_key, "role": role,
+                    "model_version": "odds" if name == "market" else versions.get(name),
+                    "methodology": "Flat 1-unit stakes on every selection passing the strategy's filters, at the "
+                                   "pre-closing price of the price source. Probabilities from the walk-forward "
+                                   "backtest (" + methodology + ") Strategies fixed in advance, none tuned."})
+    return out
 
 
 def _feature_set(model: str) -> list[str]:

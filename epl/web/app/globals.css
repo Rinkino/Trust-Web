@@ -67,6 +67,7 @@ p.lede { color: var(--muted); max-width: 52em; margin-bottom: 20px; }
 .grid { display: grid; gap: 14px; }
 .grid.stats { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .stat .label { font-size: 13px; color: var(--muted); }
 .stat .value { font-family: var(--mono); font-size: 24px; font-weight: 500; margin-top: 4px; }
 .stat .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
