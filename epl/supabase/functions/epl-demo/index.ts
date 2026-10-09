@@ -79,8 +79,11 @@ Deno.serve(async (req) => {
   }
 
   if (eligible.length < 3) {
+    const error = eligible.length === 0 && live.length === 0
+      ? 'No predictions have been published yet. The prediction pipeline has not completed a run; see the Data status page and try again once it has.'
+      : `Only ${eligible.length} eligible ${runMode} match(es) available; at least 3 are needed.`
     return json(200, {
-      error: `Only ${eligible.length} eligible ${runMode} match(es) available; at least 3 are needed.`,
+      error,
       mode: runMode, eligible_count: eligible.length, live_eligible_count: live.length,
     })
   }

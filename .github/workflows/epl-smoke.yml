@@ -38,6 +38,10 @@ jobs:
           # The API must reject bad input
           code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H 'content-type: application/json' -d '{"mode":"nope"}' "$SITE/api/demo")
           [ "$code" = "400" ] && echo "OK   400 /api/demo rejects invalid mode" || { echo "FAIL /api/demo returned $code for invalid mode"; fail=1; }
+          # The demo button end to end: create a run, then open its page
+          curl -sS -X POST -H 'content-type: application/json' -d '{"mode":"auto"}' "$SITE/api/demo" > demo.json; cat demo.json; echo
+          run_id=$(python3 -c "import json; print(json.load(open('demo.json')).get('run_id') or '')")
+          if [ -n "$run_id" ]; then check "/demo/$run_id" "Random seed"; else echo "FAIL /api/demo did not create a run"; fail=1; fi
           echo "--- dashboard numbers ---"
           curl -sS "$SITE/" | sed -e 's/<[^>]*>/ /g' | tr -s ' ' | grep -o "Historical matches [^A-Z]*\|Eligible upcoming fixtures [0-9]*\|Seasons covered [0-9]*" || true
           exit $fail
