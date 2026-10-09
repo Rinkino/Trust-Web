@@ -3,8 +3,8 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import LocalTime from '@/components/LocalTime'
 import { modelPick, points, type Outcome } from '@/lib/picks'
-import { PICKS_CHANGED, signInWithGoogle, useSession } from '@/lib/auth'
-import { callPicks, readKey, setKey } from '@/lib/player'
+import { PICKS_CHANGED, useSession } from '@/lib/auth'
+import { callPicks } from '@/lib/player'
 
 type Row = {
   match_id: string; home_team: string; away_team: string; kickoff_utc: string
@@ -18,19 +18,13 @@ const pct = (x: number) => `${Math.round(x * 100)}%`
 
 export default function MyPicks() {
   const [rows, setRows] = useState<Row[] | null>(null)
-  const [key, setK] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [showKey, setShowKey] = useState(false)
-  const [restore, setRestore] = useState('')
-  const [note, setNote] = useState('')
 
   const session = useSession()
 
   async function load() {
-    const k = readKey()
-    setK(k)
-    if (!session && !k) { setRows([]); return }
-    const r = await callPicks<{ picks: Row[] }>({ action: 'list', ...(session ? {} : { key: k }) })
+    if (!session) { setRows([]); return }
+    const r = await callPicks<{ picks: Row[] }>({ action: 'list' })
     if (!r.ok) { setError(r.data.error ?? 'Could not load your picks.'); setRows([]); return }
     setError('')
     setRows(r.data.picks)
@@ -45,11 +39,6 @@ export default function MyPicks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
-  function applyKey() {
-    const k = restore.trim().toLowerCase()
-    if (!setKey(k)) { setNote('That is not a valid key (64 characters, 0-9 and a-f).'); return }
-    setK(k); setRestore(''); setNote('Key saved in this browser.'); setRows(null); load()
-  }
 
   if (rows === null || session === undefined) return <p className="muted">Loading your picks…</p>
 
@@ -66,19 +55,11 @@ export default function MyPicks() {
 
   return (
     <>
-      {session ? (
-        <p className="small muted" style={{ marginBottom: 12 }}>Signed in as {session.user.email}. Your picks are saved to your account.</p>
-      ) : (
-        <div className="callout info" style={{ marginBottom: 16 }}>
-          <strong>Keep your picks on any device.</strong> Right now they are stored in this browser only.{' '}
-          <button className="linkish" type="button" onClick={() => signInWithGoogle()}>Sign in with Google</button> and
-          the picks you made here move into your account.
-        </div>
-      )}
+      {session && <p className="small muted" style={{ marginBottom: 12 }}>Signed in as {session.user.email}.</p>}
       {error && <p className="neg">{error}</p>}
       {rows.length === 0 ? (
         <div className="card">
-          <p>You have not made any picks{key ? '' : ' in this browser'} yet.</p>
+          <p>You have not made any picks yet.</p>
           <p className="small muted" style={{ marginTop: 6 }}>Open a match from the <Link href="/">upcoming fixtures</Link> and choose a result.</p>
         </div>
       ) : (
@@ -119,26 +100,6 @@ export default function MyPicks() {
         </>
       )}
 
-      {!session && <>
-      <h2>Your pick key</h2>
-      <p className="small muted" style={{ maxWidth: '52em' }}>
-        Without signing in, your picks are tied to a random key stored in this browser; only a scrambled (hashed) version
-        is stored on the server. Anyone with the key can see and change those picks, and a lost key cannot be recovered.
-        Signing in with Google is the simpler way to keep them.
-      </p>
-      {key ? (
-        <div className="keybox">
-          <code className="mono small">{showKey ? key : `${key.slice(0, 6)}${'•'.repeat(20)}`}</code>
-          <button className="btn ghost" type="button" onClick={() => setShowKey(s => !s)}>{showKey ? 'Hide' : 'Show'}</button>
-          <button className="btn ghost" type="button" onClick={() => navigator.clipboard?.writeText(key).then(() => setNote('Key copied.'), () => setNote('Copy failed; select the key and copy it manually.'))}>Copy</button>
-        </div>
-      ) : <p className="small muted">No key yet: one is created when you save your first pick.</p>}
-      <div className="keybox" style={{ marginTop: 10 }}>
-        <input type="text" value={restore} onChange={e => setRestore(e.target.value)} placeholder="Paste a key from another device" aria-label="Pick key" spellCheck={false} />
-        <button className="btn ghost" type="button" onClick={applyKey} disabled={!restore.trim()}>Use this key</button>
-      </div>
-      {note && <p className="small" role="status" style={{ marginTop: 6 }}>{note}</p>}
-      </>}
     </>
   )
 }

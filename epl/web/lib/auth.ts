@@ -1,24 +1,27 @@
 'use client'
-// Optional Google sign-in, the same Supabase Auth that TrustWeb uses. Signing in only
-// keeps picks with an account so they survive across browsers and devices.
-import { createClient, type Session } from '@supabase/supabase-js'
+// Google sign-in, the same Supabase Auth that TrustWeb uses. The session is kept in
+// cookies (not only in the browser) so the middleware can require it for every page.
+import { createBrowserClient } from '@supabase/ssr'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { SUPABASE_URL } from '@/lib/db'
 
-let client: ReturnType<typeof createClient> | null = null
+let client: ReturnType<typeof createBrowserClient> | null = null
 
 export function supabase() {
-  if (!client) client = createClient(SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '')
+  if (!client) client = createBrowserClient(SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '')
   return client
 }
 
-export async function signInWithGoogle() {
-  // Come back to the page the visitor was on.
-  await supabase().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href.split('#')[0] } })
+/** Google sign-in; afterwards the visitor lands on `next` (a path on this site). */
+export async function signInWithGoogle(next = '/') {
+  const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
+  await supabase().auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
 }
 
 export async function signOut() {
   await supabase().auth.signOut()
+  window.location.assign('/login')
 }
 
 export async function accessToken(): Promise<string | null> {
@@ -30,8 +33,8 @@ export async function accessToken(): Promise<string | null> {
 export function useSession(): Session | null | undefined {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   useEffect(() => {
-    supabase().auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase().auth.onAuthStateChange((_e, s) => setSession(s))
+    supabase().auth.getSession().then(({ data }: { data: { session: Session | null } }) => setSession(data.session))
+    const { data } = supabase().auth.onAuthStateChange((_e: AuthChangeEvent, s: Session | null) => setSession(s))
     return () => data.subscription.unsubscribe()
   }, [])
   return session

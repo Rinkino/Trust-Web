@@ -177,3 +177,15 @@ header.top .auth, header.top .auth-btn { margin-left: auto; }
 .auth-btn:hover { border-color: var(--accent); }
 .auth-link, .linkish { font: inherit; background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; }
 .linkish:hover, .auth-link:hover { text-decoration: underline; }
+
+/* ── Landing / login ──────────────────────────────────────────────────────── */
+.landing { max-width: 760px; margin: 24px auto 0; }
+.landing-hero h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 12px; }
+.signin { display: grid; gap: 10px; justify-items: start; margin: 8px 0 28px; max-width: 420px; }
+.google-btn { display: inline-flex; align-items: center; gap: 10px; font: inherit; font-weight: 500; font-size: 15px; padding: 11px 18px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.google-btn:hover { border-color: var(--accent); }
+.google-btn:disabled { opacity: 0.7; cursor: wait; }
+ul.landing-points { list-style: none; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px; }
+ul.landing-points li { display: grid; gap: 4px; border-top: 2px solid var(--accent); padding-top: 10px; }
+ul.landing-points span { color: var(--muted); font-size: 14px; }
+@media (max-width: 640px) { .landing-hero h1 { font-size: 26px; } }

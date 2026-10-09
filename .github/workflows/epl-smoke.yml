@@ -20,49 +20,29 @@ jobs:
     env:
       SITE: https://epl-predictor-psi.vercel.app
     steps:
-      - name: Pages respond publicly with real content
+      - name: Signed-out visitors only reach the login page
         run: |
           set -u
           fail=0
-          check() { # path, expected text
-            code=$(curl -sS -L -o page.html -w "%{http_code}" --max-time 60 "$SITE$1")
-            if [ "$code" = "200" ] && grep -q "$2" page.html; then echo "OK   $code $1"; else echo "FAIL $code $1 (expected: $2)"; head -c 400 page.html; echo; fail=1; fi
-          }
-          check "/"            "Upcoming Premier League matches"
-          check "/advanced"    "Advanced statistics"
-          check "/my-picks"    "My picks"
-          check "/evaluation"  "Model evaluation"
-          check "/predictions" "Upcoming predictions"
-          check "/demo"        "Three-match demonstration"
-          check "/history"     "Historical accuracy"
-          check "/data"        "Data status"
-          check "/api/export?model=selected&season=2025-26&target=outcome" "match_id,season,match_date"
-          # The API must reject bad input
-          code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H 'content-type: application/json' -d '{"mode":"nope"}' "$SITE/api/demo")
-          [ "$code" = "400" ] && echo "OK   400 /api/demo rejects invalid mode" || { echo "FAIL /api/demo returned $code for invalid mode"; fail=1; }
-          # The demo button end to end: create a run, then open its page
-          curl -sS -X POST -H 'content-type: application/json' -d '{"mode":"auto"}' "$SITE/api/demo" > demo.json; cat demo.json; echo
-          run_id=$(python3 -c "import json; print(json.load(open('demo.json')).get('run_id') or '')")
-          if [ -n "$run_id" ]; then check "/demo/$run_id" "Random seed"; else echo "FAIL /api/demo did not create a run"; fail=1; fi
-          # A match page from the home page, with the model's prediction and its explanation
-          match=$(curl -sS "$SITE/" | grep -o 'href="/match/[^"]*"' | head -1 | sed 's/href="//; s/"$//')
-          if [ -n "$match" ]; then
-            check "$match" "Why the model thinks this"
-            mid=${match#/match/}
-            # Picks round trip with a throwaway key: save, list, then remove
-            key=$(openssl rand -hex 32)
-            post() { curl -sS -X POST -H 'content-type: application/json' -d "$1" "$SITE/api/picks"; }
-            out=$(post "{\"action\":\"save\",\"key\":\"$key\",\"match_id\":\"$mid\",\"pick\":\"D\",\"home_goals\":1,\"away_goals\":1}"); echo "save: $out"
-            echo "$out" | grep -q '"saved"' || { echo "FAIL pick save"; fail=1; }
-            out=$(post "{\"action\":\"list\",\"key\":\"$key\"}"); echo "list: $(echo "$out" | head -c 300)"
-            echo "$out" | grep -q "\"match_id\":\"$mid\"" || { echo "FAIL pick list"; fail=1; }
-            out=$(post "{\"action\":\"clear\",\"key\":\"$key\",\"match_id\":\"$mid\"}"); echo "clear: $out"
-            echo "$out" | grep -q '"cleared"' || { echo "FAIL pick clear"; fail=1; }
-            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H 'content-type: application/json' -d '{"action":"list","key":"nope"}' "$SITE/api/picks")
-            [ "$code" = "400" ] && echo "OK   400 /api/picks rejects a bad key" || { echo "FAIL /api/picks returned $code for a bad key"; fail=1; }
-          else
-            echo "FAIL no match link on the home page"; fail=1
-          fi
-          echo "--- dashboard numbers ---"
-          curl -sS "$SITE/" | sed -e 's/<[^>]*>/ /g' | tr -s ' ' | grep -o "Historical matches [^A-Z]*\|Eligible upcoming fixtures [0-9]*\|Seasons covered [0-9]*" || true
+          # The login page is public and offers Google sign-in
+          code=$(curl -sS -o page.html -w "%{http_code}" --max-time 60 "$SITE/login")
+          if [ "$code" = "200" ] && grep -q "Continue with Google" page.html; then echo "OK   200 /login"; else echo "FAIL $code /login"; fail=1; fi
+          # Every page redirects to it (no content without signing in)
+          for p in / /my-picks /match/2026-27_arsenal_leeds /advanced /evaluation /predictions /demo /history /data; do
+            out=$(curl -sS -o /dev/null -w "%{http_code} %{redirect_url}" --max-time 60 "$SITE$p")
+            case "$out" in
+              30[27]\ *"/login?next="*) echo "OK   $p -> login";;
+              *) echo "FAIL $p returned: $out"; fail=1;;
+            esac
+          done
+          # Every API refuses
+          for req in "POST /api/picks {\"action\":\"list\"}" "POST /api/demo {}" "GET /api/export?model=selected&season=2025-26&target=outcome"; do
+            set -- $req
+            if [ "$1" = "POST" ]; then code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H 'content-type: application/json' -d "$3" "$SITE$2")
+            else code=$(curl -sS -o /dev/null -w "%{http_code}" "$SITE$2"); fi
+            [ "$code" = "401" ] && echo "OK   401 $2" || { echo "FAIL $2 returned $code"; fail=1; }
+          done
+          # The sign-in callback never redirects off-site
+          loc=$(curl -sS -o /dev/null -w "%{redirect_url}" "$SITE/auth/callback?next=//example.com")
+          case "$loc" in "$SITE/login"*) echo "OK   callback stays on site";; *) echo "FAIL callback redirected to $loc"; fail=1;; esac
           exit $fail

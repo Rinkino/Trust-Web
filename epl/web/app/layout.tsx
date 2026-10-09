@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import AuthButton from '@/components/AuthButton'
+import { hasSessionCookie } from '@/lib/supabase-server'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -14,7 +15,9 @@ const NAV = [
   ['/advanced', 'Advanced statistics'],
 ]
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Display only: hide the navigation for signed-out visitors (the middleware enforces sign-in).
+  const signedIn = await hasSessionCookie()
   return (
     <html lang="en">
       <head>
@@ -29,9 +32,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="top">
           <div className="shell">
             <Link href="/" className="brand">EPL Predictor</Link>
-            <nav>
-              {NAV.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
-            </nav>
+            {signedIn && (
+              <nav>
+                {NAV.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
+              </nav>
+            )}
             <AuthButton />
           </div>
         </header>

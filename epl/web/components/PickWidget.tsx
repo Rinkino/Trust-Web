@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { PICKS_CHANGED, signInWithGoogle, useSession } from '@/lib/auth'
+import { PICKS_CHANGED, useSession } from '@/lib/auth'
 import { callPicks, keyFor } from '@/lib/player'
 import { outcomeOfScore, type Outcome } from '@/lib/picks'
 
@@ -108,9 +108,7 @@ export default function PickWidget({ matchId, home, away, open }: { matchId: str
       {msg && <p className={`small ${msg.bad ? 'neg' : 'pos'}`} role="status">{msg.text}</p>}
       <p className="note">
         Scoring: 1 point for the right result, 2 more for the exact score.{' '}
-        {session === undefined ? null : signedIn
-          ? <>Picks are saved to your account ({session!.user.email}).</>
-          : <>Picks are kept in this browser. <button type="button" className="linkish" onClick={() => signInWithGoogle()}>Sign in with Google</button> to keep them on any device.</>}
+        {session ? <>Saved to your account ({session.user.email}).</> : null}
       </p>
     </section>
   )
