@@ -29,16 +29,17 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
       </>
     )
   }
-  const [rows, coverage] = await Promise.all([
+  const [rows, coverage, bestCheck] = await Promise.all([
     selectAll<ValueRow>('epl_value_backtest', { select: '*', run_key: `eq.${runKey}` }),
     selectAll<Coverage>('epl_odds_coverage', { select: '*' }),
+    selectAll<{ season: string; market: string; matches: number; below_100pct: number }>('epl_best_price_check', { select: '*' }),
   ])
   const split = ['validation', 'test', 'live'].includes(sp.split ?? '') ? sp.split! : 'validation'
   const seasons = [...new Set(rows.filter(r => r.split === split).map(r => r.season))].sort((a, b) => (a === 'ALL' ? -1 : b === 'ALL' ? 1 : a.localeCompare(b)))
   const season = sp.season && seasons.includes(sp.season) ? sp.season : 'ALL'
   const market = sp.market === 'ou25' ? 'ou25' : '1x2'
   const prices = [...new Set(rows.map(r => r.price_source))]
-  const price = sp.price && prices.includes(sp.price) ? sp.price : 'best'
+  const price = sp.price && prices.includes(sp.price) ? sp.price : 'average'
   const view = pick(rows, { split, season, market, price })
   const roles = ROLE_ORDER.filter(role => view.some(r => r.role === role))
   const byRole = (role: string, strategy: string) => view.find(r => r.role === role && r.strategy === strategy)
@@ -49,7 +50,7 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
   // Headline: the existing model, every positive-EV bet, best prices, validation and test.
   const head = (['validation', 'test'] as const).map(s => ({
     split: s,
-    row: rows.find(r => r.split === s && r.season === 'ALL' && r.market === market && r.price_source === 'best' && r.role === 'existing_model' && r.strategy === 'ev_0'),
+    row: rows.find(r => r.split === s && r.season === 'ALL' && r.market === market && r.price_source === 'average' && r.role === 'existing_model' && r.strategy === 'ev_0'),
   }))
 
   return (
@@ -71,7 +72,7 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
         <br />
         <span className="small">
           {model ? MODEL_LABEL[model.model_name] ?? model.model_name : 'The model'} on {MARKET_LABEL[market].toLowerCase()}, betting every
-          selection where it estimated a positive expected value, at the best price available. A model that is less accurate than the
+          selection where it estimated a positive expected value, at the average bookmaker price. A model that is less accurate than the
           market mostly finds &ldquo;value&rdquo; where it is wrong, and the bookmakers&apos; margin has to be beaten on top of that.
         </span>
       </div>
@@ -131,6 +132,8 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
             on average, its own errors.
           </p>
 
+          {price === 'best' && <BestWarning rows={bestCheck.filter(b => b.market === market)} />}
+
           <h2>Strategy results</h2>
           <p className="small muted">
             Flat stakes of 1 unit per bet at the pre-closing price of: {PRICE_LABEL[price] ?? price}. Return is profit divided by stakes.
@@ -176,8 +179,8 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
             </section>
           ))}
           <p className="note">
-            The bookmaker-market row bets only where the best price beats the average market&apos;s margin-free price, so it tests price
-            shopping rather than prediction. &ldquo;Beat closing price&rdquo; is the share of bets whose price was better than the
+            The bookmaker-market row can only bet where a price beats the average market&apos;s margin-free price, so it tests price
+            shopping rather than prediction; at average prices it never bets. &ldquo;Beat closing price&rdquo; is the share of bets whose price was better than the
             margin-free closing price (closing-line value); consistently beating the close is the usual sign of a real edge.
           </p>
 
@@ -247,6 +250,19 @@ function CoverageTable({ rows }: { rows: Coverage[] }) {
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function BestWarning({ rows }: { rows: { season: string; matches: number; below_100pct: number }[] }) {
+  const bad = rows.filter(r => r.below_100pct > 0).sort((a, b) => a.season.localeCompare(b.season))
+  if (!bad.length) return null
+  return (
+    <div className="callout">
+      <strong>Best prices flatter these results.</strong> In some matches the best prices across bookmakers add up to less than
+      100%, which would guarantee a profit by backing every outcome, so some quotes cannot have been real or obtainable:{' '}
+      {bad.map((r, i) => <span key={r.season}>{i ? ', ' : ''}{r.season}: {r.below_100pct} of {r.matches} matches</span>)}.
+      Average prices are the realistic comparison.
     </div>
   )
 }

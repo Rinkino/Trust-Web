@@ -74,3 +74,18 @@ cross join (select * from (values ('pre_closing'), ('closing')) s(stage),
                          (values ('1x2'), ('ou25')) m(market)) x(stage, book, market)
 left join cells cl on cl.season = c.season and cl.stage = x.stage and cl.book = x.book and cl.market = x.market;
 grant select on public.epl_odds_coverage to anon, authenticated;
+
+-- 4. Best prices whose implied probabilities add up to less than 100%: backing every outcome
+--    would guarantee a profit, so some of those quotes cannot have been real or obtainable.
+--    Shown next to any best-price result.
+create or replace view public.epl_best_price_check with (security_invoker = true) as
+with latest as (
+  select distinct on (match_id) match_id, season, odds from public.epl_match_odds where season >= '2023-24' order by match_id, stored_at desc
+), m as (
+  select season, mk.market, l.odds -> 'pre_closing' -> 'best' -> mk.market b
+  from latest l cross join (values ('1x2'), ('ou25')) mk(market)
+)
+select season, market, count(*) as matches,
+  count(*) filter (where (select sum(1 / x::float) from jsonb_array_elements_text(b) x) < 1) as below_100pct
+from m where b is not null group by season, market;
+grant select on public.epl_best_price_check to anon, authenticated;
