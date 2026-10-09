@@ -2,7 +2,7 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { useEffect, useRef } from 'react'
 import { PICKS_CHANGED, signOut, supabase, useSession } from '@/lib/auth'
-import { callPicks, readKey } from '@/lib/player'
+import { callPicks, clearKey, readKey } from '@/lib/player'
 
 /** The signed-in user and Sign out, in the header. After sign-in, picks made earlier in this browser move into the account. */
 export default function AuthButton() {
@@ -10,11 +10,19 @@ export default function AuthButton() {
   const claimed = useRef(false)
 
   useEffect(() => {
-    const { data } = supabase().auth.onAuthStateChange(async (event: AuthChangeEvent, s: Session | null) => {
+    // Supabase holds its auth lock while this callback runs, and the claim reads the session
+    // (which needs that lock), so the claim runs afterwards. Awaiting it here deadlocks every
+    // later session read: picks then stay on "Loading" and never save.
+    const { data } = supabase().auth.onAuthStateChange((event: AuthChangeEvent, s: Session | null) => {
       if (s && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && !claimed.current) {
         claimed.current = true
         const key = readKey()
-        if (key) await callPicks({ action: 'claim', key }).catch(() => undefined)
+        if (key) {
+          setTimeout(async () => {
+            const r = await callPicks({ action: 'claim', key }).catch(() => null)
+            if (r?.ok) { clearKey(); window.dispatchEvent(new Event(PICKS_CHANGED)) }
+          }, 0)
+        }
       }
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') window.dispatchEvent(new Event(PICKS_CHANGED))
     })
