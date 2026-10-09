@@ -1,0 +1,43 @@
+# Checks the deployed web app from outside, as an anonymous visitor.
+name: epl-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - epl/runs/smoke.txt
+  workflow_run:
+    workflows: [epl-pipeline]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE: https://epl-predictor-psi.vercel.app
+    steps:
+      - name: Pages respond publicly with real content
+        run: |
+          set -u
+          fail=0
+          check() { # path, expected text
+            code=$(curl -sS -L -o page.html -w "%{http_code}" --max-time 60 "$SITE$1")
+            if [ "$code" = "200" ] && grep -q "$2" page.html; then echo "OK   $code $1"; else echo "FAIL $code $1 (expected: $2)"; head -c 400 page.html; echo; fail=1; fi
+          }
+          check "/"            "Premier League match-statistics predictor"
+          check "/evaluation"  "Model evaluation"
+          check "/predictions" "Upcoming predictions"
+          check "/demo"        "Three-match demonstration"
+          check "/history"     "Historical accuracy"
+          check "/data"        "Data status"
+          check "/api/export?model=selected&season=2025-26&target=outcome" "match_id,season,match_date"
+          # The API must reject bad input
+          code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H 'content-type: application/json' -d '{"mode":"nope"}' "$SITE/api/demo")
+          [ "$code" = "400" ] && echo "OK   400 /api/demo rejects invalid mode" || { echo "FAIL /api/demo returned $code for invalid mode"; fail=1; }
+          echo "--- dashboard numbers ---"
+          curl -sS "$SITE/" | sed -e 's/<[^>]*>/ /g' | tr -s ' ' | grep -o "Historical matches [^A-Z]*\|Eligible upcoming fixtures [0-9]*\|Seasons covered [0-9]*" || true
+          exit $fail
