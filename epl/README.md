@@ -85,7 +85,7 @@ benefit.
   by more than 0.5% on validation. Targets where the chosen model's improvement over the baseline is not significant
   are flagged "weak" on the site.
 
-Details in `docs/methodology.md`; known weaknesses in `docs/limitations.md`.
+Details in `docs/methodology.md`; known weaknesses in `docs/limitations.md`. Results of the first production run: `docs/report.md`.
 
 ## Running it
 
