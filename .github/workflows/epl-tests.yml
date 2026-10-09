@@ -19,8 +19,8 @@ jobs:
     env:
       EPL_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlemN3cHRseXllcXNheWJoZWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMDk2NzAsImV4cCI6MjA5MDc4NTY3MH0.0fhbzVo596snx43qCO0oI5H1DBP26pP0wv-lgm32rIs
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip

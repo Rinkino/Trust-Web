@@ -85,7 +85,10 @@ def test_demo_rule_matches_edge_function_source():
     assert "ids.join(',')" in src and "sort()" in src
 
 
-def test_rows_are_json_safe_and_keep_timestamps(tmp_path):
+def test_rows_are_json_safe_and_keep_timestamps(tmp_path, monkeypatch):
+    # Inside GitHub Actions with id-token permission the writer would go remote.
+    monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_URL", raising=False)
+    monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", raising=False)
     rows = clean_rows([{"a": np.float64("nan"), "b": np.int64(3), "c": pd.Timestamp("2024-01-01", tz="UTC"),
                         "d": {"x": (1.0, 2.0)}, "e": pd.NA}])
     s = json.dumps(rows)
