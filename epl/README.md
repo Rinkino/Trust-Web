@@ -9,7 +9,7 @@ not beat a league-average baseline, the site says so.
 
 - Web app: `epl/web` (Next.js, TypeScript), deployed as the Vercel project `epl-predictor`
 - Machine learning: `epl/ml` (Python package `eplpred`)
-- Database: `epl/supabase` (SQL migrations, two edge functions)
+- Database: `epl/supabase` (SQL migrations, three edge functions)
 - Automation: `.github/workflows/epl-pipeline.yml`, `.github/workflows/epl-tests.yml`
 - Docs: `epl/docs/` (architecture, data, methodology, limitations)
 
@@ -28,7 +28,9 @@ not beat a league-average baseline, the site says so.
                       │                                    │ epl_pipeline_runs            │
                                                            └──────────────┬───────────────┘
                      Vercel (Next.js, epl-predictor)                      │ read-only anon key
-   visitors ───────► dashboard · evaluation · predictions · demo · history · data ◄─┘
+   visitors ───────► fixtures · match pages · my picks ◄──────────────────┤
+                     advanced: overview · evaluation · numbers · demo · history · data ◄─┘
+                     picks → /api/picks → epl-picks edge function (epl_user_picks)
                      "Predict 3 Random Matches" → /api/demo → epl-demo edge function
 ```
 
@@ -161,9 +163,36 @@ Create a project from the repository with **Root Directory `epl/web`** and frame
 `NEXT_PUBLIC_*` variables. Pages render per request with data cached for five minutes, so builds do not need database
 access.
 
+## The site for visitors
+
+The home page lists upcoming fixtures, each with its kickoff time, home/draw/away chances, most likely score and a
+**View prediction** button. Everything else is one click deeper:
+
+- **Match page** (`/match/<match_id>`): the model's prediction, a plain-English explanation, the visitor's own pick,
+  and secondary numbers (shots, corners, cards). A figure taken from the league-average baseline is labelled as such,
+  since it is the same for every match (e.g. both-teams-score, where no model beat the baseline in testing).
+- **My picks** (`/my-picks`): the visitor's picks scored against final results, next to the model's record on the
+  same matches.
+- **Advanced statistics** (`/advanced` and the pages under it): backtests, the model comparison, the bookmaker
+  reference, the three-match demo, historical accuracy and data quality.
+
+**Explanations are computed, not written.** For the model that produces the result probabilities (currently the
+Poisson GLM), each side's expected goals is an exact product: a baseline (an average side) times one factor per group
+of inputs (attacking form, opponent's defending, results and Elo, venue, rest, ...). The pipeline stores these factors
+and the raw inputs in `epl_prediction_explanations` (`eplpred/explain.py`; a test checks that the product reproduces
+the model's number). The site turns them into sentences (`web/lib/explain.ts`) and invents nothing. Where no
+explanation is stored for a prediction, the page says so.
+
+**Picks.** There are no accounts. Each browser generates a random 256-bit key; only its SHA-256 is stored with the
+pick. All reads and writes go through `/api/picks` → the `epl-picks` edge function. The `epl_user_picks` table has
+no public access, and the database closes picks at kickoff (trigger `epl_user_picks_guard`) whatever the caller sends.
+Each pick records the model prediction that was published at that moment. Scoring (view `epl_user_pick_scores`):
+1 point for the right result, 2 more for the exact score. The model is scored the same way, using its most likely
+result and the most likely scoreline that agrees with it.
+
 ## The three-match demonstration
 
-On the dashboard or `/demo`, press **Predict 3 Random Matches**. The `epl-demo` edge function:
+Under Advanced statistics (`/advanced` or `/demo`), press **Predict 3 Random Matches**. The `epl-demo` edge function:
 
 1. collects eligible fixtures: scheduled, kick-off in the future, with a stored pre-kickoff prediction;
 2. draws a fresh 128-bit seed and takes the three eligible matches with the smallest `sha256(seed + match_id)`;

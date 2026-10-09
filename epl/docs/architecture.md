@@ -13,12 +13,14 @@
 | `epl/ml/eplpred/metrics.py`, `selection.py` | Metrics, bootstrap, tuning, per-target selection |
 | `epl/ml/eplpred/predict.py` | Composite predictions, eligible fixtures, live predictions |
 | `epl/ml/eplpred/demo.py` | The demo selection rule (Python mirror for audits) |
+| `epl/ml/eplpred/explain.py` | Exact decomposition of the GLM's expected goals into input groups, stored with live predictions |
 | `epl/ml/eplpred/upload.py` | Batched writes via `epl-writer` (OIDC), public reads |
 | `epl/ml/eplpred/pipeline.py` | Orchestration and run status |
 | `epl/supabase/migrations/` | Schema, RLS, triggers, results view |
 | `epl/supabase/functions/epl-writer` | The only write path for pipeline data |
 | `epl/supabase/functions/epl-demo` | Creates auditable demo runs |
-| `epl/web/` | Next.js app (server components; data cached 5 minutes) |
+| `epl/supabase/functions/epl-picks` | The only path to visitors' picks (save, clear, list) |
+| `epl/web/` | Next.js app (server components; data cached 5 minutes). Fixtures, match pages and My picks up front; detailed pages in the `(advanced)` route group |
 
 ## Trust boundaries
 
@@ -30,6 +32,10 @@
    uses `security_invoker` so it inherits those rules.
 3. **Visitors → demo.** `/api/demo` validates the body and forwards to `epl-demo`, which uses the service role but can
    only insert demo runs referencing existing predictions, and is rate-limited (3 runs per 10 seconds).
+4. **Visitors → picks.** `/api/picks` validates the body and forwards to `epl-picks`. A visitor is identified only by
+   the SHA-256 of a random key held in their browser. `epl_user_picks` has RLS on and no policies for public roles, so
+   the function (service role) is the only reader and writer. A trigger rejects new or changed picks once a match has
+   kicked off, using the database clock.
 
 ## Why not ...
 
