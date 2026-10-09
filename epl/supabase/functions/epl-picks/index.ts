@@ -1,12 +1,17 @@
 // epl-picks: visitors' own match picks. The only path into epl_user_picks.
 //
-// A visitor is identified by a random 32-byte key generated in their browser. Only
-// sha256(key) is stored, so the key works like a password for that visitor's picks.
+// A pick belongs to one owner:
+//   - a signed-in account (Google sign-in through Supabase Auth, shared with TrustWeb):
+//     the caller sends the session's access token in X-User-Token, verified here; or
+//   - a browser: a random 32-byte key generated in the browser, of which only
+//     sha256(key) is stored, so the key works like a password for those picks.
 //
 // actions:
-//   save  {key, match_id, pick: 'H'|'D'|'A', home_goals?, away_goals?}
-//   clear {key, match_id}
-//   list  {key}
+//   save  {key?, match_id, pick: 'H'|'D'|'A', home_goals?, away_goals?}
+//   clear {key?, match_id}
+//   list  {key?}
+//   claim {key}   (signed in) move this browser's picks into the account; where the
+//                 account already has a pick for the same match, the account's is kept
 //
 // Picks close at kickoff: the epl_user_picks_guard trigger rejects inserts and
 // updates once the match has started, whatever this function does. Each pick is
@@ -39,17 +44,52 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return json(400, { error: 'invalid JSON' }) }
   const { action, key } = body as { action?: string; key?: string }
-  if (typeof key !== 'string' || !KEY.test(key)) return json(400, { error: 'invalid key' })
-  const player = await sha256(key)
+  if (key !== undefined && (typeof key !== 'string' || !KEY.test(key))) return json(400, { error: 'invalid key' })
+  const player = key ? await sha256(key) : null
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false },
   })
 
+  let userId: string | null = null
+  const token = req.headers.get('x-user-token')
+  if (token) {
+    const { data, error } = await db.auth.getUser(token)
+    if (error || !data.user) return json(401, { error: 'Your sign-in has expired. Please sign in again.' })
+    userId = data.user.id
+  }
+  if (!userId && !player) return json(400, { error: 'sign in, or send a browser key' })
+  // Every query below is limited to this owner.
+  // deno-lint-ignore no-explicit-any
+  const mine = (q: any) => (userId ? q.eq('user_id', userId) : q.eq('player_hash', player!))
+
+  if (action === 'claim') {
+    if (!userId || !player) return json(400, { error: 'claim needs a signed-in user and a browser key' })
+    const { data: device, error: de } = await db.from('epl_user_picks').select('pick_id,match_id')
+      .eq('player_hash', player).is('user_id', null)
+    if (de) return json(500, { error: de.message })
+    const { data: account, error: ae } = await db.from('epl_user_picks').select('match_id').eq('user_id', userId)
+    if (ae) return json(500, { error: ae.message })
+    const taken = new Set((account ?? []).map(r => r.match_id))
+    let moved = 0, kept = 0
+    for (const r of device ?? []) {
+      if (taken.has(r.match_id)) {
+        const { error } = await db.from('epl_user_picks').delete().eq('pick_id', r.pick_id)
+        if (error) return json(500, { error: error.message })
+        kept++
+      } else {
+        const { error } = await db.from('epl_user_picks').update({ user_id: userId, player_hash: null }).eq('pick_id', r.pick_id)
+        if (error) return json(500, { error: error.message })
+        moved++
+      }
+    }
+    return json(200, { moved, duplicates_dropped: kept })
+  }
+
   if (action === 'list') {
-    const { data, error } = await db.from('epl_user_pick_scores')
-      .select('match_id,home_team,away_team,kickoff_utc,pick,home_goals,away_goals,prediction_id,created_at,updated_at,match_status,fthg,ftag,ftr,points')
-      .eq('player_hash', player).order('kickoff_utc', { ascending: true }).limit(500)
+    const { data, error } = await mine(db.from('epl_user_pick_scores')
+      .select('match_id,home_team,away_team,kickoff_utc,pick,home_goals,away_goals,prediction_id,created_at,updated_at,match_status,fthg,ftag,ftr,points'))
+      .order('kickoff_utc', { ascending: true }).limit(500)
     if (error) return json(500, { error: error.message })
     const ids = (data ?? []).map(r => r.prediction_id).filter(Boolean)
     const preds: Record<string, unknown> = {}
@@ -71,12 +111,12 @@ Deno.serve(async (req) => {
   if (!open) return json(409, { error: 'Picks for this match are closed: it has kicked off.' })
 
   if (action === 'clear') {
-    const { error } = await db.from('epl_user_picks').delete().eq('player_hash', player).eq('match_id', matchId)
+    const { error } = await mine(db.from('epl_user_picks').delete()).eq('match_id', matchId)
     if (error) return json(500, { error: error.message })
     return json(200, { cleared: matchId })
   }
 
-  if (action !== 'save') return json(400, { error: 'action must be save, clear or list' })
+  if (action !== 'save') return json(400, { error: 'action must be save, clear, list or claim' })
   const pick = body.pick
   if (pick !== 'H' && pick !== 'D' && pick !== 'A') return json(400, { error: 'pick must be H, D or A' })
   const hasScore = body.home_goals !== undefined && body.home_goals !== null
@@ -88,8 +128,8 @@ Deno.serve(async (req) => {
   }
 
   const since = new Date(Date.now() - 60_000).toISOString()
-  const { count } = await db.from('epl_user_picks').select('pick_id', { count: 'exact', head: true })
-    .eq('player_hash', player).gt('updated_at', since)
+  const { count } = await mine(db.from('epl_user_picks').select('pick_id', { count: 'exact', head: true }))
+    .gt('updated_at', since)
   if ((count ?? 0) >= 30) return json(429, { error: 'Too many changes in the last minute. Try again shortly.' })
 
   // The model prediction on display right now: the latest pre-kickoff 'selected' live prediction.
@@ -98,9 +138,10 @@ Deno.serve(async (req) => {
     .order('created_at', { ascending: false }).limit(1)
   const predictionId = pred?.[0]?.prediction_id ?? null
 
+  const row = { match_id: matchId, pick, home_goals: hg, away_goals: ag, prediction_id: predictionId }
   const { data: saved, error } = await db.from('epl_user_picks').upsert(
-    { player_hash: player, match_id: matchId, pick, home_goals: hg, away_goals: ag, prediction_id: predictionId },
-    { onConflict: 'player_hash,match_id' },
+    userId ? { ...row, user_id: userId } : { ...row, player_hash: player },
+    { onConflict: userId ? 'user_id,match_id' : 'player_hash,match_id' },
   ).select('match_id,pick,home_goals,away_goals,prediction_id,created_at,updated_at').single()
   if (error) {
     const closed = /closed/.test(error.message)

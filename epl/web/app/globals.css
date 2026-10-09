@@ -168,3 +168,12 @@ td.model-cell { color: var(--muted); }
   .hda.big .hda-n { font-size: 24px; }
   .match-h1 { font-size: 22px; }
 }
+
+/* ── Sign-in ──────────────────────────────────────────────────────────────── */
+header.top .auth, header.top .auth-btn { margin-left: auto; }
+.auth { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; min-width: 60px; justify-content: flex-end; }
+.auth-name { color: var(--text); max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+.auth-btn { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; }
+.auth-btn:hover { border-color: var(--accent); }
+.auth-link, .linkish { font: inherit; background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; }
+.linkish:hover, .auth-link:hover { text-decoration: underline; }

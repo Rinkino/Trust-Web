@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import LocalTime from '@/components/LocalTime'
 import { modelPick, points, type Outcome } from '@/lib/picks'
+import { PICKS_CHANGED, signInWithGoogle, useSession } from '@/lib/auth'
 import { callPicks, readKey, setKey } from '@/lib/player'
 
 type Row = {
@@ -23,25 +24,34 @@ export default function MyPicks() {
   const [restore, setRestore] = useState('')
   const [note, setNote] = useState('')
 
-  async function load(k: string) {
-    const r = await callPicks<{ picks: Row[] }>({ action: 'list', key: k })
+  const session = useSession()
+
+  async function load() {
+    const k = readKey()
+    setK(k)
+    if (!session && !k) { setRows([]); return }
+    const r = await callPicks<{ picks: Row[] }>({ action: 'list', ...(session ? {} : { key: k }) })
     if (!r.ok) { setError(r.data.error ?? 'Could not load your picks.'); setRows([]); return }
+    setError('')
     setRows(r.data.picks)
   }
 
   useEffect(() => {
-    const k = readKey()
-    setK(k)
-    if (k) load(k); else setRows([])
-  }, [])
+    if (session === undefined) return
+    load()
+    const reload = () => { load() }
+    window.addEventListener(PICKS_CHANGED, reload)
+    return () => window.removeEventListener(PICKS_CHANGED, reload)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
 
-  function useKey() {
+  function applyKey() {
     const k = restore.trim().toLowerCase()
     if (!setKey(k)) { setNote('That is not a valid key (64 characters, 0-9 and a-f).'); return }
-    setK(k); setRestore(''); setNote('Key saved in this browser.'); setRows(null); load(k)
+    setK(k); setRestore(''); setNote('Key saved in this browser.'); setRows(null); load()
   }
 
-  if (rows === null) return <p className="muted">Loading your picks…</p>
+  if (rows === null || session === undefined) return <p className="muted">Loading your picks…</p>
 
   const settled = rows.filter(r => r.match_status === 'completed' && r.fthg != null && r.ftag != null)
   const you = settled.reduce((s, r) => s + (r.points ?? 0), 0)
@@ -56,6 +66,15 @@ export default function MyPicks() {
 
   return (
     <>
+      {session ? (
+        <p className="small muted" style={{ marginBottom: 12 }}>Signed in as {session.user.email}. Your picks are saved to your account.</p>
+      ) : (
+        <div className="callout info" style={{ marginBottom: 16 }}>
+          <strong>Keep your picks on any device.</strong> Right now they are stored in this browser only.{' '}
+          <button className="linkish" type="button" onClick={() => signInWithGoogle()}>Sign in with Google</button> and
+          the picks you made here move into your account.
+        </div>
+      )}
       {error && <p className="neg">{error}</p>}
       {rows.length === 0 ? (
         <div className="card">
@@ -100,11 +119,12 @@ export default function MyPicks() {
         </>
       )}
 
+      {!session && <>
       <h2>Your pick key</h2>
       <p className="small muted" style={{ maxWidth: '52em' }}>
-        There are no accounts. Your picks are tied to a random key stored in this browser; only a scrambled (hashed) version
-        is stored on the server. To see your picks on another device, copy the key there. Anyone with the key can see and
-        change your picks, and a lost key cannot be recovered.
+        Without signing in, your picks are tied to a random key stored in this browser; only a scrambled (hashed) version
+        is stored on the server. Anyone with the key can see and change those picks, and a lost key cannot be recovered.
+        Signing in with Google is the simpler way to keep them.
       </p>
       {key ? (
         <div className="keybox">
@@ -115,9 +135,10 @@ export default function MyPicks() {
       ) : <p className="small muted">No key yet: one is created when you save your first pick.</p>}
       <div className="keybox" style={{ marginTop: 10 }}>
         <input type="text" value={restore} onChange={e => setRestore(e.target.value)} placeholder="Paste a key from another device" aria-label="Pick key" spellCheck={false} />
-        <button className="btn ghost" type="button" onClick={useKey} disabled={!restore.trim()}>Use this key</button>
+        <button className="btn ghost" type="button" onClick={applyKey} disabled={!restore.trim()}>Use this key</button>
       </div>
       {note && <p className="small" role="status" style={{ marginTop: 6 }}>{note}</p>}
+      </>}
     </>
   )
 }

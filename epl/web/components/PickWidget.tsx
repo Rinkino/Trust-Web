@@ -1,7 +1,8 @@
 'use client'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { callPicks, getOrCreateKey, readKey } from '@/lib/player'
+import { PICKS_CHANGED, signInWithGoogle, useSession } from '@/lib/auth'
+import { callPicks, keyFor } from '@/lib/player'
 import { outcomeOfScore, type Outcome } from '@/lib/picks'
 
 type Saved = { pick: Outcome; home_goals: number | null; away_goals: number | null; updated_at?: string }
@@ -16,26 +17,34 @@ export default function PickWidget({ matchId, home, away, open }: { matchId: str
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
   const [loaded, setLoaded] = useState(false)
 
+  const session = useSession()
+  const signedIn = !!session
+
   useEffect(() => {
-    const key = readKey()
-    if (!key) { setLoaded(true); return }
-    callPicks<{ picks: (Saved & { match_id: string })[] }>({ action: 'list', key }).then(r => {
-      const mine = r.ok ? r.data.picks.find(p => p.match_id === matchId) : undefined
-      if (mine) {
-        setSaved(mine); setPick(mine.pick)
-        setHg(mine.home_goals?.toString() ?? ''); setAg(mine.away_goals?.toString() ?? '')
-      }
-      setLoaded(true)
-    }).catch(() => setLoaded(true))
-  }, [matchId])
+    if (session === undefined) return
+    const load = () => {
+      const key = keyFor(!!session, false)
+      if (!session && !key) { setSaved(null); setLoaded(true); return }
+      callPicks<{ picks: (Saved & { match_id: string })[] }>({ action: 'list', ...(key ? { key } : {}) }).then(r => {
+        const mine = r.ok ? r.data.picks.find(p => p.match_id === matchId) : undefined
+        setSaved(mine ?? null)
+        setPick(mine?.pick ?? null)
+        setHg(mine?.home_goals?.toString() ?? ''); setAg(mine?.away_goals?.toString() ?? '')
+        setLoaded(true)
+      }).catch(() => setLoaded(true))
+    }
+    load()
+    window.addEventListener(PICKS_CHANGED, load)
+    return () => window.removeEventListener(PICKS_CHANGED, load)
+  }, [matchId, session])
 
   const label = (o: Outcome) => (o === 'H' ? `${home} win` : o === 'A' ? `${away} win` : 'Draw')
 
   async function save() {
     if (!pick) return
-    const key = getOrCreateKey()
-    if (!key) { setMsg({ text: 'This browser is blocking storage, so a pick could not be kept.', bad: true }); return }
-    const body: Record<string, unknown> = { action: 'save', key, match_id: matchId, pick }
+    const key = keyFor(signedIn, true)
+    if (!signedIn && !key) { setMsg({ text: 'This browser is blocking storage. Sign in with Google to keep a pick.', bad: true }); return }
+    const body: Record<string, unknown> = { action: 'save', ...(key ? { key } : {}), match_id: matchId, pick }
     if (hg !== '' || ag !== '') {
       const h = Number(hg), a = Number(ag)
       if (!Number.isInteger(h) || !Number.isInteger(a) || h < 0 || a < 0 || h > 20 || a > 20) {
@@ -49,14 +58,14 @@ export default function PickWidget({ matchId, home, away, open }: { matchId: str
     setBusy(false)
     if (!r.ok) { setMsg({ text: r.data.error ?? 'Could not save.', bad: true }); return }
     setSaved(r.data.saved)
-    setMsg({ text: 'Saved. You can change it until kickoff.' })
+    setMsg({ text: signedIn ? 'Saved to your account. You can change it until kickoff.' : 'Saved in this browser. You can change it until kickoff.' })
   }
 
   async function clear() {
-    const key = readKey()
-    if (!key) return
+    const key = keyFor(signedIn, false)
+    if (!signedIn && !key) return
     setBusy(true); setMsg(null)
-    const r = await callPicks({ action: 'clear', key, match_id: matchId })
+    const r = await callPicks({ action: 'clear', ...(key ? { key } : {}), match_id: matchId })
     setBusy(false)
     if (!r.ok) { setMsg({ text: r.data.error ?? 'Could not remove.', bad: true }); return }
     setSaved(null); setPick(null); setHg(''); setAg('')
@@ -97,7 +106,12 @@ export default function PickWidget({ matchId, home, away, open }: { matchId: str
         <Link href="/my-picks" className="small">My picks</Link>
       </div>
       {msg && <p className={`small ${msg.bad ? 'neg' : 'pos'}`} role="status">{msg.text}</p>}
-      <p className="note">Scoring: 1 point for the right result, 2 more for the exact score. Your picks are kept in this browser; open My picks to copy your key to another device.</p>
+      <p className="note">
+        Scoring: 1 point for the right result, 2 more for the exact score.{' '}
+        {session === undefined ? null : signedIn
+          ? <>Picks are saved to your account ({session!.user.email}).</>
+          : <>Picks are kept in this browser. <button type="button" className="linkish" onClick={() => signInWithGoogle()}>Sign in with Google</button> to keep them on any device.</>}
+      </p>
     </section>
   )
 }

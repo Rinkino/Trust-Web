@@ -10,6 +10,7 @@
     "test": "node --test --experimental-strip-types lib/*.test.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
     "next": "15.5.26",
     "react": "19.2.8",
     "react-dom": "19.2.8"

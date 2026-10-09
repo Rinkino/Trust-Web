@@ -183,8 +183,10 @@ and the raw inputs in `epl_prediction_explanations` (`eplpred/explain.py`; a tes
 the model's number). The site turns them into sentences (`web/lib/explain.ts`) and invents nothing. Where no
 explanation is stored for a prediction, the page says so.
 
-**Picks.** There are no accounts. Each browser generates a random 256-bit key; only its SHA-256 is stored with the
-pick. All reads and writes go through `/api/picks` → the `epl-picks` edge function. The `epl_user_picks` table has
+**Picks.** Signing in is optional: visitors can sign in with Google (the same Supabase Auth as TrustWeb, so it is
+one account for both) to keep their picks on any device. On sign-in, picks made earlier in that browser move into the
+account. Without signing in, each browser generates a random 256-bit key and only its SHA-256 is stored with the
+pick. All reads and writes go through `/api/picks` → the `epl-picks` edge function, which verifies the sign-in token itself. The `epl_user_picks` table has
 no public access, and the database closes picks at kickoff (trigger `epl_user_picks_guard`) whatever the caller sends.
 Each pick records the model prediction that was published at that moment. Scoring (view `epl_user_pick_scores`):
 1 point for the right result, 2 more for the exact score. The model is scored the same way, using its most likely

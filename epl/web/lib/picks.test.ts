@@ -15,6 +15,13 @@ test('pick requests accept only well-formed input', () => {
   assert.equal(parsePicksRequest({ action: 'save', key: KEY, match_id: '2026-27_arsenal_leeds', pick: 'X' }).ok, false)
   assert.equal(parsePicksRequest({ action: 'save', key: KEY, match_id: "x'; drop table", pick: 'H' }).ok, false)
   assert.equal(parsePicksRequest({ action: 'list', key: 'short' }).ok, false)
+  // signed in: the key is optional, except for claiming a browser's picks
+  assert.equal(parsePicksRequest({ action: 'list' }).ok, false)
+  assert.equal(parsePicksRequest({ action: 'list' }, true).ok, true)
+  assert.equal(parsePicksRequest({ action: 'save', match_id: '2026-27_arsenal_leeds', pick: 'H' }, true).ok, true)
+  assert.equal(parsePicksRequest({ action: 'claim' }, true).ok, false)
+  assert.equal(parsePicksRequest({ action: 'claim', key: KEY }).ok, false)
+  assert.equal(parsePicksRequest({ action: 'claim', key: KEY }, true).ok, true)
   assert.equal(parsePicksRequest({ action: 'list', key: KEY, extra: 1 }).ok, false)
   assert.equal(parsePicksRequest({ action: 'save', key: KEY, match_id: '2026-27_arsenal_leeds', pick: 'H', home_goals: 1.5, away_goals: 0 }).ok, false)
 })
