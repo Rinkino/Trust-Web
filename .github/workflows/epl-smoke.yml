@@ -1,0 +1,48 @@
+# Checks the deployed web app from outside, as an anonymous visitor.
+name: epl-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - epl/runs/smoke.txt
+  workflow_run:
+    workflows: [epl-pipeline]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE: https://epl-predictor-psi.vercel.app
+    steps:
+      - name: Signed-out visitors only reach the login page
+        run: |
+          set -u
+          fail=0
+          # The login page is public and offers Google sign-in
+          code=$(curl -sS -o page.html -w "%{http_code}" --max-time 60 "$SITE/login")
+          if [ "$code" = "200" ] && grep -q "Continue with Google" page.html; then echo "OK   200 /login"; else echo "FAIL $code /login"; fail=1; fi
+          # Every page redirects to it (no content without signing in)
+          for p in / /my-picks /match/2026-27_arsenal_leeds /advanced /evaluation /predictions /demo /history /data; do
+            out=$(curl -sS -o /dev/null -w "%{http_code} %{redirect_url}" --max-time 60 "$SITE$p")
+            case "$out" in
+              30[27]\ *"/login?next="*) echo "OK   $p -> login";;
+              *) echo "FAIL $p returned: $out"; fail=1;;
+            esac
+          done
+          # Every API refuses
+          for req in "POST /api/picks {\"action\":\"list\"}" "POST /api/demo {}" "GET /api/export?model=selected&season=2025-26&target=outcome"; do
+            set -- $req
+            if [ "$1" = "POST" ]; then code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H 'content-type: application/json' -d "$3" "$SITE$2")
+            else code=$(curl -sS -o /dev/null -w "%{http_code}" "$SITE$2"); fi
+            [ "$code" = "401" ] && echo "OK   401 $2" || { echo "FAIL $2 returned $code"; fail=1; }
+          done
+          # The sign-in callback never redirects off-site
+          loc=$(curl -sS -o /dev/null -w "%{redirect_url}" "$SITE/auth/callback?next=//example.com")
+          case "$loc" in "$SITE/login"*) echo "OK   callback stays on site";; *) echo "FAIL callback redirected to $loc"; fail=1;; esac
+          exit $fail

@@ -153,7 +153,7 @@ function LoginGate({ onAuth }: { onAuth: (creds: string) => void }) {
             type="submit" disabled={loading || !user || !pass}
             style={{
               padding: '12px', borderRadius: '10px', fontWeight: 700, fontSize: '14px',
-              background: 'var(--accent)', color: '#fff', border: 'none', cursor: loading ? 'default' : 'pointer',
+              background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', cursor: loading ? 'default' : 'pointer',
               opacity: loading || !user || !pass ? 0.6 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             }}
@@ -532,7 +532,7 @@ export default function Admin() {
       {!loading && tab === 'live' && (
         <div style={{ padding: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)', animation: 'pulse 2s infinite' }} />
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }} />
             <span style={{ fontSize: '14px', fontWeight: 700 }}>{live.length} predictions live right now</span>
           </div>
           {live.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No pending predictions.</p>}

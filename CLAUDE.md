@@ -253,3 +253,16 @@ Always work on `dev-1`, merge to `dev`, then `main`.
 - **Two-metric scoring**: credit score (long-term trust) and visibility score (short-term momentum) are separate intentionally
 - **No co-author tags in commits**: never add Claude co-authored-by lines
 - **No emojis in code**: use Lucide icons instead
+
+---
+
+## EPL Statistics Predictor (`epl/`)
+
+A separate project living in this repo: Premier League match-statistics predictions with honest walk-forward
+evaluation. Full docs in `epl/README.md` and `epl/docs/`.
+
+- `epl/ml` — Python package `eplpred` (ingest → features → models → walk-forward backtest → selection → live predictions). Tests: `cd epl/ml && python -m pytest -q`.
+- `epl/web` — Next.js app, Vercel project `epl-predictor` (root directory `epl/web`), https://epl-predictor-psi.vercel.app. Google sign-in required for every page (`middleware.ts`; signed-out visitors see `/login`). Home = upcoming fixtures; `/match/<id>` explains a prediction and takes a pick; `/my-picks`; detailed pages live under the `(advanced)` route group. Branch pushes create preview deployments; production needs a production deployment.
+- `epl/supabase` — migrations for the `epl_*` tables (same Supabase project as TrustWeb) and edge functions `epl-writer` (pipeline writes, GitHub OIDC auth), `epl-demo` (three-match demo runs) and `epl-picks` (users' own picks, tied to their Google account).
+- `.github/workflows/epl-pipeline.yml` — runs the pipeline and writes to Supabase; trigger by editing `epl/runs/pipeline.txt` or manually. No secrets: auth is the job's OIDC token.
+- Rules: predictions are insert-only; stored results are protected by a trigger; the 2025/26 season is the held-out test set — never use it to choose or tune models.

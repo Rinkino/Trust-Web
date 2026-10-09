@@ -56,7 +56,7 @@ export default function BottomNav({ user, notifCount = 0 }: Props) {
               {isBell && notifCount > 0 && (
                 <span style={{
                   position: 'absolute', top: '-4px', right: '-6px',
-                  background: 'var(--accent)', color: '#fff',
+                  background: 'var(--accent)', color: 'var(--on-accent)',
                   borderRadius: '999px', fontSize: '9px', fontWeight: 700,
                   padding: '1px 4px', minWidth: '14px', textAlign: 'center',
                   lineHeight: '14px',

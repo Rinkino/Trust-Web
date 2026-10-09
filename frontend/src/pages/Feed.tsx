@@ -116,7 +116,7 @@ export default function Feed() {
               background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
               fontSize: '11px', fontWeight: 700, color: '#10b981',
             }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', animation: 'pulse-glow 2s ease-in-out infinite', display: 'inline-block' }} />
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
               Live
             </div>
           )}
@@ -198,7 +198,7 @@ export default function Feed() {
                   width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
                   background: 'var(--accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '14px', fontWeight: 700, color: '#fff',
+                  fontSize: '14px', fontWeight: 700, color: 'var(--on-accent)',
                 }}>
                   {user.username[0].toUpperCase()}
                 </div>
@@ -251,7 +251,7 @@ export default function Feed() {
                   width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
                   background: 'var(--accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '14px', fontWeight: 700, color: '#fff',
+                  fontSize: '14px', fontWeight: 700, color: 'var(--on-accent)',
                 }}>
                   {user.username[0].toUpperCase()}
                 </div>

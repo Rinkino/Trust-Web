@@ -25,7 +25,7 @@ export default function Navbar({ user, username }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const hideOn = ['/login', '/register', '/x7k2-admin']
+  const hideOn = ['/login', '/signup', '/register', '/x7k2-admin']
   if (hideOn.includes(location.pathname)) return null
 
   async function handleSignOut() {
@@ -52,7 +52,7 @@ export default function Navbar({ user, username }: Props) {
 
         {/* Logo */}
         <Link
-          to="/home"
+          to={user ? '/home' : '/'}
           style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
@@ -62,13 +62,29 @@ export default function Navbar({ user, username }: Props) {
             <path d="M147.91,70.11l13.72,13.65l-21.9-7.9L147.91,70.11z"/>
             <path d="M181.003,133.297c0,0,6.706,6.836,16.005,8.195c-0.628,3.718-1.577,5.572-1.577,5.572s15.96,12.85,35.508,4.572c-0.902,10.276-13.643,14.81-13.643,14.81S230.983,183.407,258,173c-14.657,19.075-36.539,13.759-49.848,6.944C196.19,173.819,180.788,155.727,181.003,133.297z"/>
           </svg>
-          <span style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em' }}>
-            Trust<span className="animate-gradient-text" style={{ fontWeight: 800 }}>Web</span>
+          <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+            TrustWeb
           </span>
         </Link>
 
+        {/* Logged out: sections of the landing page */}
+        {!user && (
+          <div className="nav-public-links" style={{ display: 'flex', alignItems: 'center', gap: '22px', flex: 1, marginLeft: '24px' }}>
+            {[
+              { href: '/#how-it-works', label: 'How it works' },
+              { href: '/#who-its-for',  label: "Who it's for" },
+              { href: '/#faq',          label: 'FAQ' },
+            ].map(l => (
+              <a key={l.href} href={l.href} style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >{l.label}</a>
+            ))}
+          </div>
+        )}
+
         {/* Nav links — only shown when logged in */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: user ? 1 : 0 }}>
           {user && [
             { to: '/home',        label: 'Feed' },
             { to: '/leaderboard', label: 'Leaderboard' },
@@ -159,7 +175,7 @@ export default function Navbar({ user, username }: Props) {
                   width: '32px', height: '32px', borderRadius: '50%',
                   background: 'var(--accent)',
                   border: showMenu ? '2px solid var(--accent-light)' : '2px solid transparent',
-                  cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: '#fff',
+                  cursor: 'pointer', fontSize: '12px', fontWeight: 700, color: 'var(--on-accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0, transition: 'border-color 0.15s',
                 }}
@@ -213,16 +229,14 @@ export default function Navbar({ user, username }: Props) {
               )}
             </div>
           ) : (
-            <Link to="/login" style={{
-              padding: '7px 18px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              background: 'var(--accent)', color: '#fff', textDecoration: 'none',
-              transition: 'opacity 0.15s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-            >
-              Sign in
-            </Link>
+            <>
+              <Link to="/login" className="btn-ghost" style={{ padding: '7px 14px', border: 'none' }}>
+                Log in
+              </Link>
+              <Link to="/signup" className="btn-accent" style={{ padding: '7px 16px', fontSize: '13px' }}>
+                Sign up
+              </Link>
+            </>
           )}
         </div>
       </div>
