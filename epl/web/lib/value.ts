@@ -21,22 +21,33 @@ export type ValueRow = {
 /** Fewer bets than this are reported but never described as evidence either way. */
 export const MIN_BETS_FOR_VERDICT = 200
 
-export type Verdict = { kind: 'none' | 'small' | 'loses' | 'unclear' | 'positive'; text: string }
+export type Verdict = { kind: 'none' | 'small' | 'loses' | 'unclear' | 'positive' | 'advantage'; text: string }
 
-/** Plain-language reading of one strategy result. Never calls anything "profitable":
- * a positive interval on past matches is reported as exactly that. */
-export function verdict(m: ValueMetrics | undefined): Verdict {
+/** Plain-language reading of one strategy result. The interval, not the bet count, decides:
+ * the count only rules out samples too small to read at all. A positive interval counts as
+ * evidence of an advantage only on matches never used to choose models or strategies. */
+export function verdict(m: ValueMetrics | undefined, split: string = 'validation'): Verdict {
   if (!m || m.bets === 0) return { kind: 'none', text: 'No bets passed the filters.' }
   const roi = m.roi ?? 0
   const ci = m.roi_ci
   if (m.bets < MIN_BETS_FOR_VERDICT || !ci) {
-    return { kind: 'small', text: `Only ${m.bets} bets: too few to tell skill from luck.` }
+    return { kind: 'small', text: `Insufficient sample: ${m.bets} bets is too few to tell skill from luck.` }
   }
-  const r = `${signed(roi)} return per unit staked (95% range ${signed(ci[0])} to ${signed(ci[1])})`
+  const r = `${signed(roi)} per unit staked (95% range ${signed(ci[0])} to ${signed(ci[1])}, ${m.matches ?? '?'} matches)`
   if (ci[1] < 0) return { kind: 'loses', text: `Lost money: ${r}.` }
-  if (ci[0] > 0) return { kind: 'positive', text: `Positive on these past matches: ${r}. Not proof of future profit.` }
-  return { kind: 'unclear', text: `Not distinguishable from zero: ${r}.` }
+  if (ci[0] <= 0) return { kind: 'unclear', text: `Inconclusive: ${r}. Neither a gain nor a loss is established.` }
+  if (split === 'validation') {
+    return { kind: 'positive', text: `Positive historical result: ${r}, on seasons that were also used to choose the model.` }
+  }
+  return { kind: 'advantage', text: `Evidence of an advantage on unseen matches: ${r}. Still subject to uncertainty and further testing.` }
 }
+
+export const VERDICT_TAG: Record<Verdict['kind'], [string, string]> = {
+  none: ['no bets', 'warn'], small: ['too few', 'warn'], loses: ['lost money', 'bad'], unclear: ['inconclusive', 'warn'],
+  positive: ['positive in sample', 'warn'], advantage: ['evidence of edge', 'good'],
+}
+
+export type Coverage = { season: string; completed_matches: number; stage: string; bookmaker: string; market: string; with_odds: number }
 
 export function signed(x: number | null | undefined, digits = 1): string {
   if (x == null || Number.isNaN(x)) return '—'

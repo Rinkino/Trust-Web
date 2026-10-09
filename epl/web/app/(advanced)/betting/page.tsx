@@ -2,7 +2,7 @@ import { Reliability } from '@/components/viz'
 import { select, selectAll } from '@/lib/db'
 import { MODEL_LABEL } from '@/lib/targets'
 import {
-  MARKET_LABEL, PRICE_LABEL, ROLE_LABEL, ROLE_ORDER, STRATEGY_LABEL, pick, signed, verdict, type ValueRow,
+  MARKET_LABEL, PRICE_LABEL, ROLE_LABEL, ROLE_ORDER, STRATEGY_LABEL, VERDICT_TAG, pick, signed, verdict, type Coverage, type ValueRow,
 } from '@/lib/value'
 
 // Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
@@ -29,7 +29,10 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
       </>
     )
   }
-  const rows = await selectAll<ValueRow>('epl_value_backtest', { select: '*', run_key: `eq.${runKey}` })
+  const [rows, coverage] = await Promise.all([
+    selectAll<ValueRow>('epl_value_backtest', { select: '*', run_key: `eq.${runKey}` }),
+    selectAll<Coverage>('epl_odds_coverage', { select: '*' }),
+  ])
   const split = ['validation', 'test', 'live'].includes(sp.split ?? '') ? sp.split! : 'validation'
   const seasons = [...new Set(rows.filter(r => r.split === split).map(r => r.season))].sort((a, b) => (a === 'ALL' ? -1 : b === 'ALL' ? 1 : a.localeCompare(b)))
   const season = sp.season && seasons.includes(sp.season) ? sp.season : 'ALL'
@@ -62,7 +65,7 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
         <strong>The short answer.</strong>{' '}
         {head.map(({ split: s, row }) => (
           <span key={s}>
-            {s === 'validation' ? 'Validation seasons' : 'Held-out season'}: {row ? verdict(row.metrics).text : 'not available.'}{' '}
+            {s === 'validation' ? 'Validation seasons' : 'Held-out season'}: {row ? verdict(row.metrics, s).text : 'not available.'}{' '}
           </span>
         ))}
         <br />
@@ -141,7 +144,7 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
                   <thead>
                     <tr>
                       <th>Probabilities from</th><th className="num">Bets</th><th className="num">Won</th><th className="num">Avg odds</th>
-                      <th className="num">Break-even</th><th className="num">Profit</th><th className="num">Return</th><th className="num">95% range</th>
+                      <th className="num">Matches</th><th className="num">Break-even</th><th className="num">Profit</th><th className="num">Return</th><th className="num">95% range</th>
                       <th className="num">Worst drawdown</th><th className="num">Beat closing price</th><th>Reading</th>
                     </tr>
                   </thead>
@@ -149,22 +152,21 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
                     {roles.map(role => {
                       const r = byRole(role, st)
                       const m = r?.metrics
-                      const v = verdict(m)
+                      const v = verdict(m, split)
                       return (
                         <tr key={role}>
                           <td>{ROLE_LABEL[role]}</td>
                           <td className="num">{m?.bets ?? 0}</td>
                           <td className="num">{m?.bets ? pct(m.win_rate, 1) : '—'}</td>
                           <td className="num">{m?.bets ? n2(m.avg_odds) : '—'}</td>
+                          <td className="num">{m?.matches ?? '—'}</td>
                           <td className="num">{m?.bets ? pct(m.avg_break_even, 1) : '—'}</td>
                           <td className={`num ${m?.pnl != null ? (m.pnl >= 0 ? 'pos' : 'neg') : ''}`}>{m?.bets ? `${m.pnl! >= 0 ? '+' : ''}${n2(m.pnl, 1)}` : '—'}</td>
                           <td className="num">{m?.bets ? signed(m.roi) : '—'}</td>
                           <td className="num">{m?.roi_ci ? `${signed(m.roi_ci[0])} to ${signed(m.roi_ci[1])}` : '—'}</td>
                           <td className="num">{m?.bets ? n2(m.max_drawdown, 1) : '—'}</td>
                           <td className="num">{m?.clv_n ? `${pct(m.clv_positive_share)} (avg ${signed(m.clv_mean)})` : '—'}</td>
-                          <td><span className={`tag ${v.kind === 'loses' ? 'bad' : v.kind === 'positive' ? 'good' : 'warn'}`}>{
-                            { none: 'no bets', small: 'too few', loses: 'lost money', unclear: 'unclear', positive: 'positive here' }[v.kind]
-                          }</span></td>
+                          <td><span className={`tag ${VERDICT_TAG[v.kind][1]}`} title={v.text}>{VERDICT_TAG[v.kind][0]}</span></td>
                         </tr>
                       )
                     })}
@@ -190,6 +192,13 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
         </>
       )}
 
+      <h2>Odds coverage</h2>
+      <p className="small muted">
+        Completed matches with a complete, plausible set of prices, per bookmaker. Matches without prices for a source are left
+        out of that source&apos;s results (shown above as fewer matches), never filled in.
+      </p>
+      <CoverageTable rows={coverage.filter(c => c.market === market)} />
+
       <h2>What the terms mean</h2>
       <ul className="small">
         <li><strong>Implied probability</strong> = 1 ÷ decimal odds. It includes the bookmaker&apos;s margin, so a market&apos;s implied probabilities add up to more than 100%.</li>
@@ -209,5 +218,35 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
       </ul>
       <p className="note">{anyRow?.methodology}</p>
     </>
+  )
+}
+
+function CoverageTable({ rows }: { rows: Coverage[] }) {
+  const seasons = [...new Set(rows.map(r => r.season))].sort()
+  const cols = (['pre_closing', 'closing'] as const).flatMap(stage => ['average', 'best', 'bet365', 'pinnacle'].map(b => [stage, b] as const))
+  if (!seasons.length) return <p className="muted small">Coverage appears after the first pipeline run that stores odds.</p>
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr><th rowSpan={2}>Season</th><th rowSpan={2} className="num">Matches</th><th colSpan={4}>Before closing (used for bets)</th><th colSpan={4}>Closing (used for closing-line value)</th></tr>
+          <tr>{cols.map(([s, b]) => <th key={s + b} className="num">{b === 'bet365' ? 'Bet365' : b[0].toUpperCase() + b.slice(1)}</th>)}</tr>
+        </thead>
+        <tbody>
+          {seasons.map(season => {
+            const total = rows.find(r => r.season === season)?.completed_matches ?? 0
+            return (
+              <tr key={season}>
+                <td>{season}</td><td className="num">{total}</td>
+                {cols.map(([s, b]) => {
+                  const n = rows.find(r => r.season === season && r.stage === s && r.bookmaker === b)?.with_odds ?? 0
+                  return <td key={s + b} className={`num ${n < total ? 'warn-text' : ''}`}>{n === total ? 'all' : n}</td>
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }

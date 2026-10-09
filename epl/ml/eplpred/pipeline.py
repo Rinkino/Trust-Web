@@ -330,6 +330,7 @@ def run(args) -> int:
         odds_rows = odds_table_rows(ds, writer)
         stage("persist_odds", lambda: writer.write("epl_match_odds", odds_rows))
         value_rows = stage("value_backtest", lambda: value_rows_for(fr_all, ds, selection, versions, run_key, methodology))
+        summary["value_checks"] = comparability(value_rows)
         stage("persist_value", lambda: writer.write("epl_value_backtest", value_rows))
         summary["value_backtest_rows"] = len(value_rows)
         summary["odds_rows_written"] = len(odds_rows)
@@ -391,6 +392,17 @@ def value_rows_for(fr_all, ds, selection, versions, run_key, methodology) -> lis
                                    "pre-closing price of the price source. Probabilities from the walk-forward "
                                    "backtest (" + methodology + ") Strategies fixed in advance, none tuned."})
     return out
+
+
+def comparability(rows: list[dict]) -> dict:
+    """The three sources of probabilities must be scored on identical matches. Returns the
+    (split, season, market, price source) cells where they are not, which should be none."""
+    cells: dict[tuple, set] = {}
+    for r in rows:
+        key = (r["split"], r["season"], r["market"], r["price_source"])
+        cells.setdefault(key, set()).add((r["eligible_matches"], r["period_start"], r["period_end"]))
+    bad = [list(k) for k, v in cells.items() if len(v) > 1]
+    return {"cells": len(cells), "mismatched": bad}
 
 
 def _feature_set(model: str) -> list[str]:

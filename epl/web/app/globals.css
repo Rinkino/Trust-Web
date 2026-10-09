@@ -202,3 +202,4 @@ ol.market-picks li { display: grid; grid-template-columns: 18px 1fr 70px 38px; a
 .mp-bar > span { display: block; height: 100%; background: var(--accent); }
 .mp-p { text-align: right; }
 .top-picks { border-top: 3px solid var(--accent); }
+.warn-text { color: var(--warn); }

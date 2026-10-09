@@ -50,3 +50,27 @@ alter table public.epl_value_backtest enable row level security;
 drop policy if exists epl_value_backtest_read on public.epl_value_backtest;
 create policy epl_value_backtest_read on public.epl_value_backtest for select to anon, authenticated using (true);
 revoke insert, update, delete, truncate on public.epl_value_backtest from anon, authenticated;
+
+-- 3. Odds coverage per season, stage, bookmaker and market (latest stored version per match),
+--    against completed matches, so missing prices are visible rather than silently excluded.
+create or replace view public.epl_odds_coverage with (security_invoker = true) as
+with latest as (
+  select distinct on (match_id) match_id, season, odds from public.epl_match_odds order by match_id, stored_at desc
+), completed as (
+  select season, count(*) n from public.epl_matches where status = 'completed' and season >= '2023-24' group by season
+), cells as (
+  select l.season, s.stage, b.book, m.market, count(*) n
+  from latest l
+  cross join (values ('pre_closing'), ('closing')) s(stage)
+  cross join (values ('average'), ('best'), ('bet365'), ('pinnacle')) b(book)
+  cross join (values ('1x2'), ('ou25')) m(market)
+  where l.odds -> s.stage -> b.book -> m.market is not null
+  group by 1, 2, 3, 4
+)
+select c.season, c.n as completed_matches, x.stage, x.book as bookmaker, x.market, coalesce(cl.n, 0) as with_odds
+from completed c
+cross join (select * from (values ('pre_closing'), ('closing')) s(stage),
+                         (values ('average'), ('best'), ('bet365'), ('pinnacle')) b(book),
+                         (values ('1x2'), ('ou25')) m(market)) x(stage, book, market)
+left join cells cl on cl.season = c.season and cl.stage = x.stage and cl.book = x.book and cl.market = x.market;
+grant select on public.epl_odds_coverage to anon, authenticated;

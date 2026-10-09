@@ -137,5 +137,7 @@ def test_pipeline_value_stage_on_a_real_walk_forward(league):
     assert all(r["split"] == "validation" for r in rows if r["season"] == "2023-24")
     # bets are only ever placed at pre-closing prices of the row's own price source
     assert {r["price_source"] for r in rows} == {"average", "best"}
+    from eplpred.pipeline import comparability
+    assert comparability(rows)["mismatched"] == []
     odds_rows = odds_table_rows(ds, SimpleNamespace(remote=False))
     assert len(odds_rows) == len(lg) and len({r["odds_hash"] for r in odds_rows}) == 1
