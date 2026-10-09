@@ -122,3 +122,35 @@ def test_writer_refreshes_short_lived_oidc_token(monkeypatch):
     assert w.remote and w.token == "tok1"
     w._token_at -= up.Writer.TOKEN_MAX_AGE + 1
     assert w.token == "tok2" and len(calls) == 2
+
+
+def test_glm_explanation_reproduces_the_model_and_is_stored_with_live_predictions(league):
+    import math
+
+    from eplpred.explain import GROUPS, feature_group
+    from eplpred.models.ml import count_features
+
+    m, now = _with_schedule(league)
+    data = m.set_index("match_id").join(build_features(m))
+    selection = {"outcome": "glm", "goals_home": "glm", "goals_away": "glm", "btts": "baseline"}
+    preds, _ = predict_live(data, {"glm": {"alpha": 1.0}, "baseline": {}}, selection, now=now)
+    keys = {k for k, _ in GROUPS}
+    assert all(feature_group(c) in keys for c in count_features("goals"))
+    for p in preds:
+        e = p["explanation"]
+        assert e["model_name"] == "glm" and e["outcome"] == p["values"]["outcome"]
+        for side in ("home", "away"):
+            s = e["sides"][side]
+            # baseline x every group factor == the model's expected goals (rounding only)
+            product = e["baseline_expected"] * math.prod(s["factors"].values())
+            assert math.isclose(product, s["expected"], rel_tol=2e-3)
+            assert math.isclose(s["expected"], p["per_model"]["glm"][f"goals_{side}"]["mean"], rel_tol=2e-3)
+        assert e["sides"]["home"]["factors"]["venue"] > 1 > e["sides"]["away"]["factors"]["venue"]
+        assert set(e["facts"]["home"]) == set(e["fact_labels"])
+
+
+def test_no_explanation_when_the_outcome_model_has_none(league):
+    m, now = _with_schedule(league)
+    data = m.set_index("match_id").join(build_features(m))
+    preds, _ = predict_live(data, {"baseline": {}}, {"outcome": "baseline", "goals_home": "baseline"}, now=now)
+    assert preds and all(p["explanation"] is None for p in preds)

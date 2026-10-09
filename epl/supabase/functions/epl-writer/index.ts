@@ -18,6 +18,7 @@ const jwks = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`))
 const TABLES: Record<string, { mode: 'insert' | 'upsert'; onConflict?: string }> = {
   epl_matches:           { mode: 'upsert', onConflict: 'match_id' },
   epl_predictions:       { mode: 'insert' },
+  epl_prediction_explanations: { mode: 'insert' },
   epl_model_evaluations: { mode: 'upsert', onConflict: 'run_key,model_name,model_version,target,split,season' },
   epl_model_registry:    { mode: 'upsert', onConflict: 'model_name,model_version' },
   epl_target_selection:  { mode: 'upsert', onConflict: 'selection_version,target' },

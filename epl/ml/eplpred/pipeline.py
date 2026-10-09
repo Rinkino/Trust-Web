@@ -302,6 +302,10 @@ def run(args) -> int:
                                   "selection_version": selection_version, "data_cutoff": last_result, "values": vals,
                                   "target_models": None, "pipeline_run": run_key})
         stage("persist_live", lambda: writer.write("epl_predictions", pred_rows))
+        expl_rows = [{"pipeline_run": run_key, "match_id": p["match_id"], "model_name": p["explanation"]["model_name"],
+                      "model_version": versions[p["explanation"]["model_name"]], "explanation": p["explanation"]}
+                     for p in live if p.get("explanation")]
+        stage("persist_explanations", lambda: writer.write("epl_prediction_explanations", expl_rows))
         summary["live_predictions"] = len(live)
 
         # Backtest predictions are stored once per model version (they are deterministic).

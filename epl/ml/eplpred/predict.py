@@ -8,6 +8,7 @@ import pandas as pd
 from .backtest import make_model
 from .config import LIVE_HORIZON_DAYS, TARGETS
 from .derive import derive
+from .explain import explain
 
 COUNT_TARGETS = [t.key for t in TARGETS if t.kind == "count"]
 
@@ -56,14 +57,20 @@ def predict_live(data: pd.DataFrame, configs: dict[str, dict], selection: dict[s
         return [], info
     needed = sorted(set(selection.values()))
     per_model: dict[str, dict[str, dict]] = {}
+    explanations: dict[str, dict] = {}
     for name in needed:
         model = make_model(name, configs.get(name)).fit(train, cutoff)
         per_model[name] = {p.match_id: derive(p)[0] for p in model.predict(fixtures)}
+        if name == selection.get("outcome"):
+            explanations = explain(name, model, fixtures)
+            for mid, e in explanations.items():
+                e["model_name"] = name
+                e["outcome"] = per_model[name][mid].get("outcome")
     out = []
     for mid, r in fixtures.iterrows():
         vals_by_model = {m: per_model[m][mid] for m in needed}
         values, used = composite(vals_by_model, selection)
         out.append({"match_id": mid, "home_team": r.home_team, "away_team": r.away_team,
                     "kickoff_utc": r.kickoff_utc, "match_date": r.match_date, "values": values,
-                    "target_models": used, "per_model": vals_by_model})
+                    "target_models": used, "per_model": vals_by_model, "explanation": explanations.get(mid)})
     return out, info
