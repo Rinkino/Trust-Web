@@ -3,17 +3,14 @@ import Link from 'next/link'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'EPL Statistics Predictor',
-  description: 'Premier League match-statistics predictions with honest, out-of-sample evaluation.',
+  title: 'EPL Predictor',
+  description: 'Premier League match predictions explained in plain English, with your own picks scored against the model.',
 }
 
 const NAV = [
-  ['/', 'Dashboard'],
-  ['/evaluation', 'Model evaluation'],
-  ['/predictions', 'Upcoming predictions'],
-  ['/demo', 'Three-match demo'],
-  ['/history', 'Historical accuracy'],
-  ['/data', 'Data status'],
+  ['/', 'Fixtures'],
+  ['/my-picks', 'My picks'],
+  ['/advanced', 'Advanced statistics'],
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,9 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="top">
           <div className="shell">
-            <Link href="/" className="brand">EPL Statistics Predictor</Link>
+            <Link href="/" className="brand">EPL Predictor</Link>
             <nav>
-              {NAV.slice(1).map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
+              {NAV.map(([href, label]) => <Link key={href} href={href}>{label}</Link>)}
             </nav>
           </div>
         </header>
