@@ -34,8 +34,8 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
   }
   const [rows, coverage, bestCheck] = await Promise.all([
     selectAll<ValueRow>('epl_value_backtest', { select: '*', competition: `eq.${league}`, run_key: `eq.${runKey}` }),
-    selectAll<Coverage>('epl_odds_coverage', { select: '*' }),
-    selectAll<{ season: string; market: string; matches: number; below_100pct: number }>('epl_best_price_check', { select: '*' }),
+    selectAll<Coverage>('epl_odds_coverage', { select: '*', competition: `eq.${league}` }),
+    selectAll<{ season: string; market: string; matches: number; below_100pct: number }>('epl_best_price_check', { select: '*', competition: `eq.${league}` }),
   ])
   const split = ['validation', 'test', 'live'].includes(sp.split ?? '') ? sp.split! : 'validation'
   const seasons = [...new Set(rows.filter(r => r.split === split).map(r => r.season))].sort((a, b) => (a === 'ALL' ? -1 : b === 'ALL' ? 1 : a.localeCompare(b)))

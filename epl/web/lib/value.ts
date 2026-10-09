@@ -47,7 +47,7 @@ export const VERDICT_TAG: Record<Verdict['kind'], [string, string]> = {
   positive: ['positive in sample', 'warn'], advantage: ['evidence of edge', 'good'],
 }
 
-export type Coverage = { season: string; completed_matches: number; stage: string; bookmaker: string; market: string; with_odds: number }
+export type Coverage = { season: string; completed_matches: number; stage: string; bookmaker: string; market: string; with_odds: number; competition: string }
 
 export function signed(x: number | null | undefined, digits = 1): string {
   if (x == null || Number.isNaN(x)) return '—'
