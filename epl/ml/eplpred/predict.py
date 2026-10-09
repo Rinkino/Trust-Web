@@ -12,6 +12,21 @@ from .explain import explain
 
 COUNT_TARGETS = [t.key for t in TARGETS if t.kind == "count"]
 
+# Live predictions also keep the full distribution of each match total, so the site can
+# show the model's most likely outcomes with their probabilities (e.g. "8-9 corners: 24%").
+PMF_STATS = ["goals", "shots", "sot", "corners", "yellows"]
+
+
+def compact_pmf(p, mass: float = 0.9995) -> list[float]:
+    """P(total = 0), P(total = 1), ... until `mass` of the probability is covered."""
+    out, cum = [], 0.0
+    for x in p:
+        out.append(round(float(x), 4))
+        cum += float(x)
+        if cum >= mass:
+            break
+    return out
+
 
 def composite(values_by_model: dict[str, dict], selection: dict[str, str]) -> tuple[dict, dict]:
     """Assemble one prediction from the model selected for each target.
@@ -23,6 +38,9 @@ def composite(values_by_model: dict[str, dict], selection: dict[str, str]) -> tu
         if v is not None:
             values[target] = v
             used[target] = model
+            pmf = values_by_model.get(model, {}).get(f"{target}_pmf")
+            if pmf is not None:  # distribution from the same model as the target
+                values[f"{target}_pmf"] = pmf
     # Most likely scorelines come from the model that produced the goal expectations.
     gm = selection.get("goals_home")
     if gm and "top_scorelines" in values_by_model.get(gm, {}):
@@ -60,7 +78,13 @@ def predict_live(data: pd.DataFrame, configs: dict[str, dict], selection: dict[s
     explanations: dict[str, dict] = {}
     for name in needed:
         model = make_model(name, configs.get(name)).fit(train, cutoff)
-        per_model[name] = {p.match_id: derive(p)[0] for p in model.predict(fixtures)}
+        per_model[name] = {}
+        for p in model.predict(fixtures):
+            vals, pmfs = derive(p)
+            for s in PMF_STATS:
+                if f"{s}_total" in pmfs and f"{s}_total" in vals:
+                    vals[f"{s}_total_pmf"] = compact_pmf(pmfs[f"{s}_total"])
+            per_model[name][p.match_id] = vals
         if name == selection.get("outcome"):
             explanations = explain(name, model, fixtures)
             for mid, e in explanations.items():

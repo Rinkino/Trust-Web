@@ -154,3 +154,26 @@ def test_no_explanation_when_the_outcome_model_has_none(league):
     data = m.set_index("match_id").join(build_features(m))
     preds, _ = predict_live(data, {"baseline": {}}, {"outcome": "baseline", "goals_home": "baseline"}, now=now)
     assert preds and all(p["explanation"] is None for p in preds)
+
+
+def test_live_predictions_store_total_distributions_from_the_selected_model(league):
+    from eplpred.predict import PMF_STATS
+
+    m, now = _with_schedule(league)
+    data = m.set_index("match_id").join(build_features(m))
+    selection = {"goals_total": "poisson_strength", "corners_total": "team_avg", "outcome": "baseline"}
+    preds, _ = predict_live(data, {"poisson_strength": {"halflife_days": 240.0, "l2": 2.0}, "team_avg": {}, "baseline": {}},
+                            selection, now=now)
+    for p in preds:
+        for name, vals in p["per_model"].items():
+            for s in PMF_STATS:
+                if f"{s}_total" not in vals:
+                    continue
+                pmf = vals[f"{s}_total_pmf"]
+                assert 0.999 <= sum(pmf) <= 1.0 + 1e-3 and all(x >= 0 for x in pmf)
+                mean = sum(i * x for i, x in enumerate(pmf))
+                assert abs(mean - vals[f"{s}_total"]["mean"]) < 0.05 * max(1.0, vals[f"{s}_total"]["mean"])
+        # the composite carries the distribution of the model chosen for that target
+        assert p["values"]["corners_total_pmf"] == p["per_model"]["team_avg"]["corners_total_pmf"]
+        assert p["values"]["goals_total_pmf"] == p["per_model"]["poisson_strength"]["goals_total_pmf"]
+        assert "shots_total_pmf" not in p["values"]  # shots_total not selected here
