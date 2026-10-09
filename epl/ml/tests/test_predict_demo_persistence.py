@@ -103,7 +103,7 @@ def test_prediction_rows_never_set_created_at():
     # created_at is assigned by the database at insert time, so a prediction cannot
     # be back-dated by the client.
     src = (ROOT / "epl/ml/eplpred/pipeline.py").read_text()
-    pred_section = src[src.index("# 7. Predictions"):src.index("summary[\"backtest_predictions_written\"]")]
+    pred_section = src[src.index("# 7. Predictions"):src.index("cs[\"backtest_predictions_written\"]")]
     assert "created_at" not in pred_section
 
 

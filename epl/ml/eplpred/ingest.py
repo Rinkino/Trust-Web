@@ -172,7 +172,7 @@ def parse_odds(header: list[str], rec: list[str]) -> tuple[dict, list[str]]:
     return out, bad
 
 
-def parse_football_data(raw: bytes, start_year: int, url: str) -> IngestResult:
+def parse_football_data(raw: bytes, start_year: int, url: str, competition: str = "EPL") -> IngestResult:
     season = season_label(start_year)
     res = IngestResult(source="football-data.co.uk", url=url)
     text = decode(raw)
@@ -271,7 +271,7 @@ def parse_football_data(raw: bytes, start_year: int, url: str) -> IngestResult:
             continue
         seen[mid] = lineno
         row.update({
-            "match_id": mid, "status": "completed", "competition": "EPL", "round": None,
+            "match_id": mid, "status": "completed", "competition": competition, "round": None,
             "source": "football-data.co.uk", "source_url": url,
             "source_row_hash": hashlib.sha256(json.dumps(rec).encode()).hexdigest()[:16],
         })
@@ -279,7 +279,7 @@ def parse_football_data(raw: bytes, start_year: int, url: str) -> IngestResult:
     return res
 
 
-def parse_fixture_json(raw: bytes, start_year: int, url: str) -> IngestResult:
+def parse_fixture_json(raw: bytes, start_year: int, url: str, competition: str = "EPL") -> IngestResult:
     """Published schedule. Scores in this feed are only used to cross-check results."""
     season = season_label(start_year)
     res = IngestResult(source="fixturedownload.com", url=url)
@@ -306,7 +306,7 @@ def parse_fixture_json(raw: bytes, start_year: int, url: str) -> IngestResult:
             seen.add(mid)
             hs, as_ = it.get("HomeTeamScore"), it.get("AwayTeamScore")
             res.rows.append({
-                "match_id": mid, "season": season, "competition": "EPL",
+                "match_id": mid, "season": season, "competition": competition,
                 "match_date": local.date().isoformat(), "kickoff_time": local.strftime("%H:%M"),
                 "kickoff_utc": ko.isoformat(), "round": it.get("RoundNumber"),
                 "home_team": home, "away_team": away, "status": "scheduled",

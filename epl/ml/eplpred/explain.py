@@ -30,7 +30,7 @@ GROUPS: list[tuple[str, str]] = [
     ("opp_quality", "Opponent's results and rating"),
     ("venue", "Playing at home or away"),
     ("schedule", "Rest days and fixture congestion"),
-    ("promoted", "Newly promoted sides"),
+    ("promoted", "Promotion or relegation"),
     ("tempo", "How open both sides' recent games have been"),
     ("league", "League-wide scoring level and stage of the season"),
 ]
@@ -49,7 +49,7 @@ def feature_group(col: str) -> str:
     side, name = col[:2], col[2:]
     if name in _SCHEDULE:
         return "schedule"
-    if name == "promoted":
+    if name in ("promoted", "from_above", "from_below", "prev_tier_ppg", "prev_tier_gdpg"):
         return "promoted"
     if name in _QUALITY:
         return "quality" if side == "t_" else "opp_quality"

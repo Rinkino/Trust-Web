@@ -4,7 +4,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 FOOTBALL_DATA_BASE = "https://www.football-data.co.uk/mmz4281"
-FIXTURE_JSON_URL = "https://fixturedownload.com/feed/json/epl-{year}"
+FIXTURE_JSON_URL = "https://fixturedownload.com/feed/json/{slug}-{year}"
+
+
+@dataclass(frozen=True)
+class Competition:
+    code: str            # stored in every table's `competition` column
+    division: str        # football-data.co.uk file name (E0.csv, E1.csv)
+    name: str
+    fixture_slug: str    # fixturedownload.com feed name
+    tier: int            # 1 = top division; promotion and relegation link neighbouring tiers
+
+
+# Each competition gets its own models, evaluation and held-out season. They are linked
+# only through teams moving between them (see features.py).
+COMPETITIONS: dict[str, Competition] = {
+    "EPL": Competition("EPL", "E0", "Premier League", "epl", 1),
+    "ELC": Competition("ELC", "E1", "Championship", "championship", 2),
+}
+DEFAULT_COMPETITION = "EPL"
 
 FIRST_SEASON_START = 2000          # 2000/01 is the first season with match statistics
 CURRENT_SEASON_START = 2026        # 2026/27
@@ -24,8 +42,12 @@ def season_start_year(label: str) -> int:
     return int(label[:4])
 
 
-def football_data_url(start_year: int) -> str:
-    return f"{FOOTBALL_DATA_BASE}/{season_code(start_year)}/E0.csv"
+def football_data_url(start_year: int, competition: str = "EPL") -> str:
+    return f"{FOOTBALL_DATA_BASE}/{season_code(start_year)}/{COMPETITIONS[competition].division}.csv"
+
+
+def fixture_url(start_year: int, competition: str = "EPL") -> str:
+    return FIXTURE_JSON_URL.format(slug=COMPETITIONS[competition].fixture_slug, year=start_year)
 
 
 ALL_SEASONS = [season_label(y) for y in range(FIRST_SEASON_START, CURRENT_SEASON_START + 1)]

@@ -19,13 +19,13 @@ const TABLES: Record<string, { mode: 'insert' | 'upsert'; onConflict?: string }>
   epl_matches:           { mode: 'upsert', onConflict: 'match_id' },
   epl_predictions:       { mode: 'insert' },
   epl_prediction_explanations: { mode: 'insert' },
-  epl_model_evaluations: { mode: 'upsert', onConflict: 'run_key,model_name,model_version,target,split,season' },
-  epl_model_registry:    { mode: 'upsert', onConflict: 'model_name,model_version' },
-  epl_target_selection:  { mode: 'upsert', onConflict: 'selection_version,target' },
+  epl_model_evaluations: { mode: 'upsert', onConflict: 'competition,run_key,model_name,model_version,target,split,season' },
+  epl_model_registry:    { mode: 'upsert', onConflict: 'competition,model_name,model_version' },
+  epl_target_selection:  { mode: 'upsert', onConflict: 'competition,selection_version,target' },
   epl_data_source_audit: { mode: 'insert' },
   epl_pipeline_runs:     { mode: 'upsert', onConflict: 'run_key' },
   epl_match_odds:        { mode: 'insert' },
-  epl_value_backtest:    { mode: 'upsert', onConflict: 'run_key,model_name,market,price_source,strategy,split,season' },
+  epl_value_backtest:    { mode: 'upsert', onConflict: 'competition,run_key,model_name,market,price_source,strategy,split,season' },
 }
 
 function json(status: number, body: unknown) {

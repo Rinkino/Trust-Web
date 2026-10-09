@@ -3,6 +3,8 @@ import { select, type PredictionRow } from '@/lib/db'
 import { num, pct } from '@/lib/format'
 import { errorRows } from '@/lib/history'
 import { parseHistoryFilter } from '@/lib/validate'
+import LeagueTabs from '@/components/LeagueTabs'
+import { leagueOf } from '@/lib/leagues'
 import { MODEL_LABEL, MODEL_SHORT, TARGET_BY_KEY, TARGETS } from '@/lib/targets'
 
 // Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
@@ -12,9 +14,11 @@ const PAGE = 50
 type SP = Promise<Record<string, string | undefined>>
 
 export default async function HistoryPage({ searchParams }: { searchParams: SP }) {
-  const f = parseHistoryFilter(await searchParams, TARGETS.map(t => t.key))
+  const sp = await searchParams
+  const league = leagueOf(sp.league)
+  const f = parseHistoryFilter(sp, TARGETS.map(t => t.key))
   const q: Record<string, string> = {
-    select: '*', mode: 'eq.backtest', model_name: `eq.${f.model}`, status: 'eq.completed', order: 'match_date.desc,match_id.asc',
+    select: '*', competition: `eq.${league}`, mode: 'eq.backtest', model_name: `eq.${f.model}`, status: 'eq.completed', order: 'match_date.desc,match_id.asc',
   }
   if (f.season) q.season = `eq.${f.season}`
   if (f.team) q.or = `(home_team.eq."${f.team}",away_team.eq."${f.team}")`
@@ -26,7 +30,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: SP }
 
   return (
     <>
-      <h1>Historical accuracy</h1>
+      <LeagueTabs path="/history" current={league} />
+      <h1 style={{ marginTop: 14 }}>Historical accuracy</h1>
       <p className="lede">
         Predictions for past matches, made walk-forward (each from models trained only on earlier gameweeks), beside what
         actually happened. 2023/24–2024/25 were used to choose models; 2025/26 and 2026/27 are out of sample.

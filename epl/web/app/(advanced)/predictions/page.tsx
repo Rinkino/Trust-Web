@@ -5,6 +5,8 @@ import { select, type CountValue, type PredictionRow } from '@/lib/db'
 import { loadEvidence } from '@/lib/evidence'
 import { num, pct, when } from '@/lib/format'
 import { GROUPS } from '@/lib/targets'
+import LeagueTabs from '@/components/LeagueTabs'
+import { leagueOf } from '@/lib/leagues'
 
 // Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
 export const dynamic = 'force-dynamic'
@@ -14,9 +16,10 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export default async function PredictionsPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams
+  const league = leagueOf(sp.league)
   const now = new Date().toISOString()
   const rows = await select<PredictionRow>('epl_predictions', {
-    select: '*', mode: 'eq.live', model_name: 'eq.selected', kickoff_utc: `gt.${now}`, order: 'kickoff_utc.asc,created_at.desc',
+    select: '*', competition: `eq.${league}`, mode: 'eq.live', model_name: 'eq.selected', kickoff_utc: `gt.${now}`, order: 'kickoff_utc.asc,created_at.desc',
   })
   // Latest prediction per fixture
   const latest = new Map<string, PredictionRow>()
@@ -31,11 +34,12 @@ export default async function PredictionsPage({ searchParams }: { searchParams: 
   if (from) list = list.filter(r => r.match_date >= from)
   if (to) list = list.filter(r => r.match_date <= to)
   const focus = sp.match ? list.find(r => r.match_id === sp.match) : undefined
-  const evidence = focus ? await loadEvidence() : {}
+  const evidence = focus ? await loadEvidence(league) : {}
 
   return (
     <>
-      <h1>Upcoming predictions</h1>
+      <LeagueTabs path="/predictions" current={league} />
+      <h1 style={{ marginTop: 14 }}>Upcoming predictions</h1>
       <p className="lede">
         Verified fixtures from the published 2026/27 schedule that have not kicked off, within the next three weeks. Each
         prediction was generated before kickoff by the scheduled pipeline and is never edited afterwards.

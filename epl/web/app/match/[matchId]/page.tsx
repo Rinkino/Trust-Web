@@ -6,6 +6,7 @@ import PickWidget from '@/components/PickWidget'
 import { latestSelection, select, type PredictionRow, type Values } from '@/lib/db'
 import { drivers, effect, factValue, type Explanation } from '@/lib/explain'
 import { withResultModel } from '@/lib/live'
+import { LEAGUES, leagueOf } from '@/lib/leagues'
 import { STATS, type Sides, type Stat } from '@/lib/props'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic'
 const MATCH = /^[0-9]{4}-[0-9]{2}_[a-z0-9-]+_[a-z0-9-]+$/
 
 type Match = {
-  match_id: string; season: string; home_team: string; away_team: string; kickoff_utc: string | null; match_date: string
+  match_id: string; season: string; competition: string; home_team: string; away_team: string; kickoff_utc: string | null; match_date: string
   status: string; fthg: number | null; ftag: number | null; hc: number | null; ac: number | null; hy: number | null; ay: number | null
   hs: number | null; as: number | null; hst: number | null; ast: number | null
 }
@@ -38,7 +39,7 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
   const { matchId } = await params
   if (!MATCH.test(matchId)) notFound()
   const [m] = await select<Match>('epl_matches', {
-    select: 'match_id,season,home_team,away_team,kickoff_utc,match_date,status,fthg,ftag,hc,ac,hy,ay,hs,as,hst,ast',
+    select: 'match_id,season,competition,home_team,away_team,kickoff_utc,match_date,status,fthg,ftag,hc,ac,hy,ay,hs,as,hst,ast',
     match_id: `eq.${matchId}`, limit: 1,
   })
   if (!m) notFound()
@@ -53,7 +54,7 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
     p ? select<{ explanation: Explanation }>('epl_prediction_explanations', {
       select: 'explanation', pipeline_run: `eq.${p.pipeline_run}`, match_id: `eq.${matchId}`, limit: 1,
     }) : Promise.resolve([]),
-    latestSelection(),
+    latestSelection(m.competition),
   ])
   const started = !!m.kickoff_utc && new Date(m.kickoff_utc).getTime() <= Date.now()
   const open = m.status === 'scheduled' && !started
@@ -81,7 +82,7 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
 
   return (
     <>
-      <p className="small"><Link href="/">← All matches</Link></p>
+      <p className="small"><Link href={m.competition === 'EPL' ? '/' : `/?league=${m.competition}`}>← All {LEAGUES[leagueOf(m.competition)]} matches</Link></p>
       <header className="match-head">
         <h1 className="match-h1">{H} <span className="muted">vs</span> {A}</h1>
         <p className="muted small">

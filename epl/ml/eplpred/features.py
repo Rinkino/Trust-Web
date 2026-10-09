@@ -73,15 +73,51 @@ def _points(gf: int, ga: int) -> int:
     return 3 if gf > ga else 1 if gf == ga else 0
 
 
+@dataclass(frozen=True)
+class TierRecord:
+    """One team's completed season in a modelled competition."""
+    tier: int
+    ppg: float
+    gdpg: float
+
+
+def season_records(matches: pd.DataFrame, tiers: dict[str, int]) -> dict[tuple[str, str], TierRecord]:
+    """(season, team) -> tier and per-game record, from completed matches in every competition.
+    Used only for the season *before* the one being predicted, which is complete by then."""
+    out: dict[tuple[str, str], TierRecord] = {}
+    c = matches[matches.status == "completed"]
+    if "competition" not in c.columns:
+        return out
+    for (season, comp), g in c.groupby(["season", "competition"]):
+        tier = tiers.get(comp)
+        if tier is None:
+            continue
+        acc: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])   # pts, gd, n
+        for r in g.itertuples():
+            gh, ga = int(r.fthg), int(r.ftag)
+            for team, gf, gag in ((r.home_team, gh, ga), (r.away_team, ga, gh)):
+                a = acc[team]
+                a[0] += _points(gf, gag); a[1] += gf - gag; a[2] += 1
+        for team, (pts, gd, n) in acc.items():
+            out[(season, team)] = TierRecord(tier, pts / n, gd / n)
+    return out
+
+
 class FeatureBuilder:
-    def __init__(self, cfg: FeatureConfig | None = None):
+    def __init__(self, cfg: FeatureConfig | None = None, tier: int = 1,
+                 records: dict[tuple[str, str], TierRecord] | None = None):
         self.cfg = cfg or FeatureConfig()
+        # This competition's tier, and every team's record in the modelled competitions, so a
+        # team arriving from another division can carry its previous season with it.
+        self.tier = tier
+        self.records = records or {}
         self.lam = 0.5 ** (1.0 / self.cfg.ewm_halflife)
         self.teams: dict[str, _Team] = defaultdict(_Team)
         self.league: dict[str, deque] = {}
         self.season_teams: dict[str, set] = {}
         self.season_order: list[str] = []
         self.relegated_elo: dict[str, float] = {}     # season -> mean elo of teams relegated at its end
+        self.promoted_out_elo: dict[str, float] = {}  # season -> mean elo of teams that went up at its end
 
     # ── league environment ────────────────────────────────────────────────────
     def _league_mean(self, key: str, default: float) -> float:
@@ -109,26 +145,51 @@ class FeatureBuilder:
             return
         prev = self.season_order[-1] if self.season_order else None
         if prev is not None:
-            # Relegated = the three lowest of the previous season by points, goal difference, goals.
+            leavers = [t for t in self.season_teams[prev] if t not in teams_in_season]
+            went_up = [t for t in leavers if self._tier_in(season, t) is not None and self._tier_in(season, t) < self.tier]
+            went_down = [t for t in leavers if t not in went_up]
+            # Relegated = the lowest of the previous season by points, goal difference, goals.
             table = sorted(self.season_teams[prev], key=lambda t: (self.teams[t].s_pts, self.teams[t].s_gf - self.teams[t].s_ga, self.teams[t].s_gf))
-            relegated = [t for t in table if t not in teams_in_season][:3] or table[:3]
+            relegated = [t for t in table if t in went_down][:3] or table[:3]
             self.relegated_elo[prev] = float(np.mean([self.teams[t].elo for t in relegated]))
+            if went_up:
+                self.promoted_out_elo[prev] = float(np.mean([self.teams[t].elo for t in went_up]))
         for t in teams_in_season:
             st = self.teams[t]
             if prev is not None and t not in self.season_teams.get(prev, set()):
-                # Promoted (or returning) team: start from the level of the sides that went down.
-                st.elo = self.relegated_elo.get(prev, 1420.0)
+                if self._came_from_above(t, season):
+                    # Relegated into this division: start at the level of the sides that went up.
+                    st.elo = self.promoted_out_elo.get(prev, 1580.0)
+                else:
+                    # Promoted (or returning) team: start from the level of the sides that went down.
+                    st.elo = self.relegated_elo.get(prev, 1420.0)
             else:
                 st.elo = (1 - self.cfg.elo_season_regress) * st.elo + self.cfg.elo_season_regress * 1500.0
             st.season, st.s_pts, st.s_gf, st.s_ga, st.s_n = season, 0, 0, 0, 0
         self.season_teams[season] = set(teams_in_season)
         self.season_order.append(season)
 
+    def _tier_in(self, season: str, team: str) -> int | None:
+        r = self.records.get((season, team))
+        return r.tier if r else None
+
+    def _previous(self, team: str, season: str) -> TierRecord | None:
+        """The team's record last season in another modelled division, if it changed division."""
+        prev = _previous_season(season)
+        r = self.records.get((prev, team)) if prev else None
+        return r if r and r.tier != self.tier else None
+
+    def _came_from_above(self, team: str, season: str) -> bool:
+        r = self._previous(team, season)
+        return bool(r and r.tier < self.tier)
+
     def _promoted(self, team: str, season: str) -> int:
+        """New to this division from below (or from outside the modelled divisions)."""
         i = self.season_order.index(season)
         if i == 0:
             return 0
-        return int(team not in self.season_teams[self.season_order[i - 1]])
+        new = team not in self.season_teams[self.season_order[i - 1]]
+        return int(new and not self._came_from_above(team, season))
 
     def _positions(self, season: str) -> dict[str, float]:
         teams = sorted(self.season_teams[season],
@@ -168,6 +229,11 @@ class FeatureBuilder:
         f["n7"] = float(sum(1 for d in st.dates if 0 < (day - d).days <= 7))
         f["n14"] = float(sum(1 for d in st.dates if 0 < (day - d).days <= 14))
         f["promoted"] = float(self._promoted(team, season))
+        prev = self._previous(team, season)
+        f["from_above"] = float(bool(prev and prev.tier < self.tier))
+        f["from_below"] = float(bool(prev and prev.tier > self.tier))
+        f["prev_tier_ppg"] = prev.ppg if prev else 0.0
+        f["prev_tier_gdpg"] = prev.gdpg if prev else 0.0
         return f
 
     def _features(self, row, priors, pos) -> dict:
@@ -260,8 +326,27 @@ class FeatureBuilder:
         return feats
 
 
+def _previous_season(season: str) -> str | None:
+    try:
+        y = int(season[:4]) - 1
+    except ValueError:
+        return None
+    return f"{y}-{(y + 1) % 100:02d}"
+
+
 def build_features(matches: pd.DataFrame, cfg: FeatureConfig | None = None) -> pd.DataFrame:
-    return FeatureBuilder(cfg).run(matches)
+    """Features for every match. Each competition is built separately (its own league
+    averages, table and ratings); teams that changed division carry last season's record."""
+    from .config import COMPETITIONS
+
+    if "competition" not in matches.columns or matches.competition.nunique() <= 1:
+        comp = matches.competition.iloc[0] if "competition" in matches.columns and len(matches) else "EPL"
+        tiers = {c.code: c.tier for c in COMPETITIONS.values()}
+        return FeatureBuilder(cfg, tiers.get(comp, 1), season_records(matches, tiers)).run(matches)
+    tiers = {c.code: c.tier for c in COMPETITIONS.values()}
+    records = season_records(matches, tiers)
+    parts = [FeatureBuilder(cfg, tiers.get(comp, 1), records).run(g) for comp, g in matches.groupby("competition")]
+    return pd.concat(parts)
 
 
 def feature_columns(feats: pd.DataFrame) -> list[str]:

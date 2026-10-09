@@ -1,4 +1,6 @@
 import { Reliability } from '@/components/viz'
+import LeagueTabs from '@/components/LeagueTabs'
+import { leagueOf } from '@/lib/leagues'
 import { select, selectAll } from '@/lib/db'
 import { MODEL_LABEL } from '@/lib/targets'
 import {
@@ -19,7 +21,8 @@ const SPLIT_LABEL: Record<string, string> = {
 
 export default async function BettingPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams
-  const latest = await select<{ run_key: string }>('epl_value_backtest', { select: 'run_key', order: 'created_at.desc', limit: 1 })
+  const league = leagueOf(sp.league)
+  const latest = await select<{ run_key: string }>('epl_value_backtest', { select: 'run_key', competition: `eq.${league}`, order: 'created_at.desc', limit: 1 })
   const runKey = latest[0]?.run_key
   if (!runKey) {
     return (
@@ -30,7 +33,7 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
     )
   }
   const [rows, coverage, bestCheck] = await Promise.all([
-    selectAll<ValueRow>('epl_value_backtest', { select: '*', run_key: `eq.${runKey}` }),
+    selectAll<ValueRow>('epl_value_backtest', { select: '*', competition: `eq.${league}`, run_key: `eq.${runKey}` }),
     selectAll<Coverage>('epl_odds_coverage', { select: '*' }),
     selectAll<{ season: string; market: string; matches: number; below_100pct: number }>('epl_best_price_check', { select: '*' }),
   ])
@@ -55,7 +58,8 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
 
   return (
     <>
-      <h1>Betting against the market</h1>
+      <LeagueTabs path="/betting" current={league} />
+      <h1 style={{ marginTop: 14 }}>Betting against the market</h1>
       <p className="lede">
         Would betting on the model&apos;s numbers have made money? Every past match was predicted walk-forward (using only
         earlier matches), then compared with the bookmakers&apos; odds published before kick-off. The strategies below were
@@ -78,6 +82,7 @@ export default async function BettingPage({ searchParams }: { searchParams: SP }
       </div>
 
       <form className="filters" method="get">
+        <input type="hidden" name="league" value={league} />
         <label>Market
           <select name="market" defaultValue={market}>
             {Object.entries(MARKET_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

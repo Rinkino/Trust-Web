@@ -16,6 +16,10 @@ CANONICAL = {
     "Middlesbrough", "Newcastle", "Norwich", "Nott'm Forest", "Portsmouth", "QPR", "Reading",
     "Sheffield United", "Sheffield Weds", "Southampton", "Stoke", "Sunderland", "Swansea",
     "Tottenham", "Watford", "West Brom", "West Ham", "Wigan", "Wimbledon", "Wolves",
+    # Championship (and its predecessor, the First Division) clubs not listed above
+    "Bristol City", "Bristol Rvs", "Burton", "Colchester", "Crewe", "Doncaster", "Gillingham", "Grimsby",
+    "Milton Keynes Dons", "Millwall", "Oxford", "Peterboro", "Plymouth", "Preston", "Rotherham", "Scunthorpe",
+    "Southend", "Stockport", "Swindon", "Tranmere", "Walsall", "Wrexham", "Wycombe", "Yeovil",
 }
 
 # Lower-cased, punctuation-stripped alias -> canonical
@@ -36,6 +40,14 @@ _ALIASES = {
     "huddersfield town": "Huddersfield", "birmingham city": "Birmingham",
     "blackburn rovers": "Blackburn", "bolton wanderers": "Bolton", "wigan athletic": "Wigan",
     "derby county": "Derby", "charlton athletic": "Charlton", "bradford city": "Bradford",
+    "preston north end": "Preston", "plymouth argyle": "Plymouth", "oxford united": "Oxford", "oxford utd": "Oxford",
+    "rotherham united": "Rotherham", "peterborough": "Peterboro", "peterborough united": "Peterboro",
+    "mk dons": "Milton Keynes Dons", "milton keynes": "Milton Keynes Dons", "sheffield wed": "Sheffield Weds",
+    "bristol rovers": "Bristol Rvs", "doncaster rovers": "Doncaster", "scunthorpe united": "Scunthorpe",
+    "southend united": "Southend", "stockport county": "Stockport", "swindon town": "Swindon",
+    "tranmere rovers": "Tranmere", "wycombe wanderers": "Wycombe", "yeovil town": "Yeovil",
+    "crewe alexandra": "Crewe", "colchester united": "Colchester", "grimsby town": "Grimsby",
+    "burton albion": "Burton", "wrexham afc": "Wrexham", "west brom": "West Brom", "qpr": "QPR",
 }
 
 
