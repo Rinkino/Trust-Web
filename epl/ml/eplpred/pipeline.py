@@ -166,11 +166,12 @@ def run(args) -> int:
             audit.append({**a, "pipeline_run": run_key})
         if conflicts:
             audit.append({"pipeline_run": run_key, "source": "pipeline", "source_url": "epl_matches",
-                          "retrieved_at": now_iso, "records_retrieved": len(conflicts), "records_rejected": len(conflicts),
+                          "retrieved_at": now_iso, "records_retrieved": len(conflicts), "records_accepted": 0, "records_rejected": len(conflicts),
                           "validation_errors": [{"conflict": c} for c in conflicts]})
         if ds.merge and (ds.merge.conflicts or ds.merge.unverified_results):
             audit.append({"pipeline_run": run_key, "source": "cross-check", "source_url": "results vs schedule",
                           "retrieved_at": now_iso, "records_retrieved": ds.merge.completed,
+                          "records_accepted": ds.merge.completed - len(ds.merge.conflicts),
                           "records_rejected": len(ds.merge.conflicts),
                           "validation_errors": [{"conflict": c} for c in ds.merge.conflicts] +
                                                [{"unverified_result": u} for u in ds.merge.unverified_results]})

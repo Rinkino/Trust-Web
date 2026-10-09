@@ -277,3 +277,9 @@ details.more[open] summary { border-bottom: 1px solid var(--border); }
 .sm-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
 .saved-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); }
 .link-btn { font: inherit; background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; }
+
+/* Expected numbers: one row per statistic, teams side by side, then the total */
+.exp-table th[scope="row"] { font-weight: 600; text-align: left; }
+.exp-table td strong { font-size: 1.05rem; }
+.exp-table td:last-child, .exp-table th:last-child { border-left: 1px solid var(--border, rgba(127,127,127,.25)); }
+.exp-act { color: var(--muted, #888); font-size: .85rem; }

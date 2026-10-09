@@ -14,6 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 TEAMS = ["Arsenal", "Chelsea", "Liverpool", "Everton", "Fulham", "Brentford"]
 
 
+@pytest.fixture(autouse=True)
+def _never_upload(monkeypatch):
+    """Tests run inside the pipeline job, where GitHub's OIDC variables would let the
+    writer reach the real database. Without them every write goes to local files."""
+    monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_URL", raising=False)
+    monkeypatch.delenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", raising=False)
+
+
 def make_season(start_year: int, rng: np.random.Generator, teams=TEAMS) -> list[dict]:
     """Double round robin, one round a week from mid August."""
     season = f"{start_year}-{(start_year + 1) % 100:02d}"

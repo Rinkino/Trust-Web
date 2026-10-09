@@ -48,6 +48,10 @@ jobs:
           cache-dependency-path: epl/ml/requirements.txt
       - run: pip install -r requirements.txt
       - name: Tests
+        # Blank the OIDC variables so no test can authenticate to the database.
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
         run: python -m pytest -q
       - name: Run pipeline
         run: python -m eplpred.pipeline --download --out out --jobs 4 ${{ inputs.quick && '--quick' || '' }}
