@@ -138,7 +138,7 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
                   const d = drivers(e, side, H, A)
                   return (
                     <div key={side}>
-                      <h3>{side === 'home' ? H : A}: <span className="mono">{e.sides[side].expected.toFixed(2)}</span> expected goals</h3>
+                      <h3>{side === 'home' ? H : A}: <span className="mono">{((rv?.[`goals_${side}`] as CountValue | undefined)?.mean ?? e.sides[side].expected).toFixed(2)}</span> expected goals</h3>
                       <ul className="drivers">
                         {d.big.map(x => (
                           <li key={x.key}><span className={x.pct > 0 ? 'pos' : 'neg'}>{x.pct > 0 ? '▲' : '▼'}</span> {x.text} <span className="muted">{effect(x.pct)}</span></li>
