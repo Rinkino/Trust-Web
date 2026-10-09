@@ -300,7 +300,8 @@ def run(args) -> int:
         for name in all_models + ["selected"]:
             ver = versions[name]
             if writer.remote and read_table("epl_predictions", "prediction_id",
-                                            {"mode": "eq.backtest", "model_name": f"eq.{name}", "model_version": f"eq.{ver}"}, page=1):
+                                            {"mode": "eq.backtest", "model_name": f"eq.{name}", "model_version": f"eq.{ver}",
+                                             "limit": "1"}):
                 continue
             for r in fr_all[fr_all.model == name].to_dict("records"):
                 bt_rows.append({"mode": "backtest", "match_id": r["match_id"], "home_team": r["home_team"],

@@ -87,7 +87,7 @@ create table if not exists public.epl_model_evaluations (
   target              text not null,
   target_kind         text not null check (target_kind in ('count','probability','outcome')),
   split               text not null check (split in ('validation','test')),
-  season              text,                             -- null = whole split
+  season              text,                             -- 'ALL' = whole split
   eval_start          date not null,
   eval_end            date not null,
   n_matches           integer not null,
@@ -131,11 +131,10 @@ create index if not exists epl_pred_mode_idx  on public.epl_predictions (mode, m
 create index if not exists epl_pred_run_idx   on public.epl_predictions (pipeline_run);
 
 create or replace function public.epl_predictions_immutable() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   raise exception 'epl_predictions rows are immutable; insert a new prediction instead';
 end $$;
-drop trigger if exists epl_predictions_no_update on public.epl_predictions;
 create trigger epl_predictions_no_update before update on public.epl_predictions
   for each row execute function public.epl_predictions_immutable();
 
@@ -187,16 +186,4 @@ create table if not exists public.epl_pipeline_runs (
   error               text
 );
 
--- ── Row Level Security: public read, no public writes ──────────────────────────
-do $$
-declare t text;
-begin
-  foreach t in array array['epl_matches','epl_model_registry','epl_target_selection','epl_model_evaluations',
-                           'epl_predictions','epl_demo_runs','epl_demo_run_items','epl_data_source_audit','epl_pipeline_runs']
-  loop
-    execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists %I on public.%I', t || '_read', t);
-    execute format('create policy %I on public.%I for select to anon, authenticated using (true)', t || '_read', t);
-    execute format('revoke insert, update, delete, truncate on public.%I from anon, authenticated', t);
-  end loop;
-end $$;
+-- Row Level Security is in 20261009000050_epl_rls.sql.

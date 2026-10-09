@@ -14,11 +14,11 @@ from .config import MODEL_ORDER, SIMPLER_MODEL_TOLERANCE, TARGETS
 from .metrics import PRIMARY, evaluate, paired_bootstrap, per_match_loss
 
 GRIDS: dict[str, dict[str, list]] = {
-    "poisson_strength": {"halflife_days": [120.0, 240.0, 480.0], "l2": [2.0, 8.0, 32.0]},
+    "poisson_strength": {"halflife_days": [120.0, 240.0, 480.0], "l2": [8.0, 32.0, 128.0]},
     "glm": {"alpha": [1.0, 3.0, 10.0]},
-    "hgb": {"max_iter": [50, 100, 250], "min_samples_leaf": [40, 120]},
-    "logit_outcome": {"C": [0.001, 0.003, 0.01, 0.1]},
-    "hgb_outcome": {"max_iter": [50, 100, 250]},
+    "hgb": {"max_iter": [50, 100, 250], "min_samples_leaf": [20, 40, 120]},
+    "logit_outcome": {"C": [0.0003, 0.001, 0.003, 0.01]},
+    "hgb_outcome": {"max_iter": [25, 50, 100]},
 }
 
 
