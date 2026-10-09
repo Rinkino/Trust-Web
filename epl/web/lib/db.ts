@@ -88,8 +88,10 @@ export async function latestRun(): Promise<PipelineRun | null> {
   return rows[0] ?? null
 }
 
-export async function latestSelection(): Promise<Selection[]> {
-  const v = await select<{ selection_version: string }>('epl_target_selection', { select: 'selection_version', order: 'created_at.desc', limit: 1 })
+export async function latestSelection(competition = 'EPL'): Promise<Selection[]> {
+  const v = await select<{ selection_version: string }>('epl_target_selection', {
+    select: 'selection_version', competition: `eq.${competition}`, order: 'created_at.desc', limit: 1,
+  })
   if (!v[0]) return []
-  return select<Selection>('epl_target_selection', { select: '*', selection_version: `eq.${v[0].selection_version}` })
+  return select<Selection>('epl_target_selection', { select: '*', competition: `eq.${competition}`, selection_version: `eq.${v[0].selection_version}` })
 }

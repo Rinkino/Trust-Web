@@ -20,7 +20,7 @@ import pandas as pd
 
 from . import CODE_VERSION
 from .backtest import DEFAULT_CONFIG, FACTORIES, walk_forward
-from .config import (LIVE_SEASON, MODEL_ORDER, REFERENCE_MODELS, TARGET_BY_KEY, TARGETS, TEST_SEASONS, TRAIN_FROM,
+from .config import (COMPETITIONS, DEFAULT_COMPETITION, LIVE_SEASON, MODEL_ORDER, REFERENCE_MODELS, TARGET_BY_KEY, TARGETS, TEST_SEASONS, TRAIN_FROM,
                      TUNING_SEASONS, VALIDATION_SEASONS)
 from .dataset import build_dataset, coverage_report
 from .features import build_features
@@ -94,11 +94,12 @@ def match_rows(ds, existing: dict[str, dict], now_iso: str) -> tuple[list[dict],
     return rows, conflicts
 
 
-def eval_rows(ev: pd.DataFrame, run_key: str, split: str, season: str, versions: dict, methodology: str) -> list[dict]:
+def eval_rows(ev: pd.DataFrame, run_key: str, split: str, season: str, versions: dict, methodology: str,
+              competition: str = "EPL") -> list[dict]:
     out = []
     for r in ev.to_dict("records"):
         out.append({
-            "run_key": run_key, "model_name": r["model"], "model_version": versions[r["model"]],
+            "competition": competition, "run_key": run_key, "model_name": r["model"], "model_version": versions[r["model"]],
             "target": r["target"], "target_kind": r["kind"], "split": split, "season": season,
             "eval_start": r["eval_start"], "eval_end": r["eval_end"], "n_matches": int(r["n"]),
             "methodology": methodology,
@@ -184,158 +185,235 @@ def run(args) -> int:
         log(f"data: {summary['data']['completed']} completed, {summary['data']['scheduled']} scheduled, "
             f"{len(mrows)} rows written, {len(conflicts)} conflicts")
 
-        # 2. Features
+        # 2. Features: each competition built separately, linked by promotion and relegation
         feats = stage("features", lambda: build_features(ds.matches))
-        data = ds.matches.set_index("match_id").join(feats)
+        all_data = ds.matches.set_index("match_id").join(feats)
 
-        # 3. Tune on the earliest evaluation season only
-        if args.quick:
-            configs = dict(DEFAULT_CONFIG)
-            tuning = pd.DataFrame()
-        else:
-            configs, tuning = stage("tune", lambda: tune(data, TUNING_SEASONS, n_jobs=args.jobs, log=log))
-        summary["configs"] = configs
-        versions = {m: model_version(m, configs[m]) for m in configs}
+        # Bookmaker odds for every competition (insert-only history)
+        odds_rows = odds_table_rows(ds, writer)
+        stage("persist_odds", lambda: writer.write("epl_match_odds", odds_rows))
+        summary["odds_rows_written"] = len(odds_rows)
 
-        # 4. Walk-forward on validation, test and the live season to date
-        eval_seasons = VALIDATION_SEASONS + TEST_SEASONS + [LIVE_SEASON]
-        bt = stage("backtest", lambda: walk_forward(data, eval_seasons, configs, n_jobs=args.jobs, progress=True))
-        fr = bt.frame()
-        all_models = [m for m in MODEL_ORDER + REFERENCE_MODELS if m in configs]
-        val = fr[fr.season.isin(VALIDATION_SEASONS)]
-        test_main = fr[fr.season.isin(TEST_SEASONS)]
-        ev_val = evaluate(val, all_models)
-        sel = select(ev_val, val)
-        selection = dict(zip(sel.target, sel.selected))
-        sel_hash = hashlib.sha256(json.dumps({"sel": selection, "cfg": configs}, sort_keys=True).encode()).hexdigest()[:8]
-        selection_version = f"{CODE_VERSION}+{sel_hash}"
-        summary["selection_version"] = selection_version
-        summary["selection"] = selection
+        summary["competitions"] = {}
+        for comp in [c for c in COMPETITIONS if (all_data.competition == c).any()]:
+            data = all_data[all_data.competition == comp]
+            cs: dict = {}
+            summary["competitions"][comp] = cs
+            log(f"=== {comp}: {int((data.status == 'completed').sum())} completed, {int((data.status == 'scheduled').sum())} scheduled")
+            # 3. Tune on the earliest evaluation season only
+            if args.quick:
+                configs = dict(DEFAULT_CONFIG)
+                tuning = pd.DataFrame()
+            else:
+                configs, tuning = stage(f"{comp}:tune", lambda: tune(data, TUNING_SEASONS, n_jobs=args.jobs, log=log))
+            cs["configs"] = configs
+            versions = {m: model_version(m, configs[m]) for m in configs}
 
-        # Composite ('selected') predictions for every out-of-sample match
-        comp_rows = []
-        oos = fr[fr.season.isin(TEST_SEASONS + [LIVE_SEASON])]
-        from .derive import actual_values, score_row  # noqa: E402  (scores of the composite)
-        for mid, g in oos.groupby("match_id"):
-            vbm = dict(zip(g.model, g["values"]))
-            values, used = composite(vbm, selection)
-            first = g.iloc[0]
-            scores = {}
-            for t, mname in used.items():
-                if t in TARGET_BY_KEY:
-                    s = g[g.model == mname].iloc[0]["scores"].get(t)
-                    if s is not None:
-                        scores[t] = s
-            comp_rows.append({"match_id": mid, "season": first.season, "match_date": first.match_date,
-                              "home_team": first.home_team, "away_team": first.away_team, "model": "selected",
-                              "cutoff": first.cutoff, "train_last_date": first.train_last_date, "values": values,
-                              "scores": scores, "target_models": used})
-        comp = pd.DataFrame(comp_rows)
-        fr_all = pd.concat([fr, comp], ignore_index=True)
-        versions["selected"] = selection_version
+            # 4. Walk-forward on validation, test and the live season to date
+            eval_seasons = VALIDATION_SEASONS + TEST_SEASONS + [LIVE_SEASON]
+            bt = stage(f"{comp}:backtest", lambda: walk_forward(data, eval_seasons, configs, n_jobs=args.jobs, progress=True))
+            fr = bt.frame()
+            all_models = [m for m in MODEL_ORDER + REFERENCE_MODELS if m in configs]
+            val = fr[fr.season.isin(VALIDATION_SEASONS)]
+            test_main = fr[fr.season.isin(TEST_SEASONS)]
+            ev_val = evaluate(val, all_models)
+            sel = select(ev_val, val)
+            selection = dict(zip(sel.target, sel.selected))
+            sel_hash = hashlib.sha256(json.dumps({"sel": selection, "cfg": configs, "competition": comp}, sort_keys=True).encode()).hexdigest()[:8]
+            selection_version = f"{CODE_VERSION}+{sel_hash}"
+            cs["selection_version"] = selection_version
+            cs["selection"] = selection
 
-        methodology = METHODOLOGY.format(tune=", ".join(TUNING_SEASONS), val=", ".join(VALIDATION_SEASONS),
-                                         test=", ".join(TEST_SEASONS))
-        ev_rows = eval_rows(ev_val, run_key, "validation", "ALL", versions, methodology)
-        for s in VALIDATION_SEASONS:
-            ev_rows += eval_rows(evaluate(val[val.season == s], all_models), run_key, "validation", s, versions, methodology)
-        test_models = all_models + ["selected"]
-        ev_test = evaluate(fr_all[fr_all.season.isin(TEST_SEASONS)], test_models)
-        ev_rows += eval_rows(ev_test, run_key, "test", "ALL", versions, methodology)
-        for s in TEST_SEASONS + [LIVE_SEASON]:
-            e = evaluate(fr_all[fr_all.season == s], test_models)
-            if not e.empty:
-                ev_rows += eval_rows(e, run_key, "test", s, versions, methodology)
-        stage("persist_evaluations", lambda: writer.write("epl_model_evaluations", ev_rows))
+            # Composite ('selected') predictions for every out-of-sample match
+            comp_rows = []
+            oos = fr[fr.season.isin(TEST_SEASONS + [LIVE_SEASON])]
+            from .derive import actual_values, score_row  # noqa: E402  (scores of the composite)
+            for mid, g in oos.groupby("match_id"):
+                vbm = dict(zip(g.model, g["values"]))
+                values, used = composite(vbm, selection)
+                first = g.iloc[0]
+                scores = {}
+                for t, mname in used.items():
+                    if t in TARGET_BY_KEY:
+                        s = g[g.model == mname].iloc[0]["scores"].get(t)
+                        if s is not None:
+                            scores[t] = s
+                comp_rows.append({"match_id": mid, "season": first.season, "match_date": first.match_date,
+                                  "home_team": first.home_team, "away_team": first.away_team, "model": "selected",
+                                  "cutoff": first.cutoff, "train_last_date": first.train_last_date, "values": values,
+                                  "scores": scores, "target_models": used})
+            composite_df = pd.DataFrame(comp_rows)
+            fr_all = pd.concat([fr, composite_df], ignore_index=True)
+            versions["selected"] = selection_version
 
-        # 5. Selection + registry
-        sel_rows = []
-        for r in sel.to_dict("records"):
-            sel_rows.append({"selection_version": selection_version, "target": r["target"], "target_kind": r["kind"],
-                             "selected_model": r["selected"], "selected_version": versions[r["selected"]],
-                             "primary_metric": r["primary_metric"], "selection_period": ", ".join(VALIDATION_SEASONS),
-                             "reason": r["reason"], "reliable": r["reliable"],
-                             "metrics": {"metric": r["metric"], "baseline_metric": r["baseline_metric"],
-                                         "improvement_pct": r["improvement_pct"], "improvement_ci": r["improvement_ci"],
-                                         "candidates": r["candidates"], "best_raw": r["best_raw"]}})
-        writer.write("epl_target_selection", sel_rows)
+            methodology = METHODOLOGY.format(tune=", ".join(TUNING_SEASONS), val=", ".join(VALIDATION_SEASONS),
+                                             test=", ".join(TEST_SEASONS))
+            ev_rows = eval_rows(ev_val, run_key, "validation", "ALL", versions, methodology, comp)
+            for s in VALIDATION_SEASONS:
+                ev_rows += eval_rows(evaluate(val[val.season == s], all_models), run_key, "validation", s, versions, methodology, comp)
+            test_models = all_models + ["selected"]
+            ev_test = evaluate(fr_all[fr_all.season.isin(TEST_SEASONS)], test_models)
+            ev_rows += eval_rows(ev_test, run_key, "test", "ALL", versions, methodology, comp)
+            for s in TEST_SEASONS + [LIVE_SEASON]:
+                e = evaluate(fr_all[fr_all.season == s], test_models)
+                if not e.empty:
+                    ev_rows += eval_rows(e, run_key, "test", s, versions, methodology, comp)
+            stage(f"{comp}:persist_evaluations", lambda: writer.write("epl_model_evaluations", ev_rows))
 
-        # 6. Live predictions
-        live, live_info = stage("predict_live", lambda: predict_live(data, configs, selection))
-        summary["live"] = live_info
-        cutoff_ts = live_info.get("now")
-        last_result = pd.Timestamp(ds.completed.match_date.max()).tz_localize("UTC") + pd.Timedelta(hours=23, minutes=59)
+            # 5. Selection + registry
+            sel_rows = []
+            for r in sel.to_dict("records"):
+                sel_rows.append({"competition": comp, "selection_version": selection_version, "target": r["target"], "target_kind": r["kind"],
+                                 "selected_model": r["selected"], "selected_version": versions[r["selected"]],
+                                 "primary_metric": r["primary_metric"], "selection_period": ", ".join(VALIDATION_SEASONS),
+                                 "reason": r["reason"], "reliable": r["reliable"],
+                                 "metrics": {"metric": r["metric"], "baseline_metric": r["baseline_metric"],
+                                             "improvement_pct": r["improvement_pct"], "improvement_ci": r["improvement_ci"],
+                                             "candidates": r["candidates"], "best_raw": r["best_raw"]}})
+            writer.write("epl_target_selection", sel_rows)
 
-        registry = []
-        for m in all_models:
-            cls = FACTORIES[m]
-            used_for = [t for t, mm in selection.items() if mm == m]
-            tm = ev_test[(ev_test.model == m)]
-            registry.append({
-                "model_name": m, "model_version": versions[m], "algorithm": getattr(cls, "algorithm", m),
-                "description": (cls.__doc__ or "").strip().split("\n\n")[0],
-                "feature_set": _feature_set(m), "config": {"params": configs.get(m, {}), "train_from": TRAIN_FROM,
-                                                         "tuning": json.loads(tuning[tuning.model == m].to_json(orient="records")) if len(tuning) else []},
-                "training_cutoff": str(last_result.date()), "training_start": TRAIN_FROM,
-                "training_end": str(ds.completed.match_date.max().date()),
-                "metrics": {"targets_selected": used_for,
-                            "test": {r.target: r._asdict().get(PRIMARY[r.kind]) for r in tm.itertuples()}},
-                "artifact_location": f"retrained each run from config; code {CODE_VERSION} @ {sha[:7]}",
-                "status": "production" if used_for else ("retired" if m in REFERENCE_MODELS else "candidate"),
-            })
-        writer.write("epl_model_registry", registry)
+            # 6. Live predictions
+            live, live_info = stage(f"{comp}:predict_live", lambda: predict_live(data, configs, selection))
+            cs["live"] = live_info
+            cutoff_ts = live_info.get("now")
+            last_result = pd.Timestamp(data[data.status == "completed"].match_date.max()).tz_localize("UTC") + pd.Timedelta(hours=23, minutes=59)
 
-        # 7. Predictions
-        pred_rows = []
-        for p in live:
-            pred_rows.append({"mode": "live", "match_id": p["match_id"], "home_team": p["home_team"],
-                              "away_team": p["away_team"], "kickoff_utc": p["kickoff_utc"],
-                              "match_date": p["match_date"], "model_name": "selected",
-                              "model_version": selection_version, "selection_version": selection_version,
-                              "data_cutoff": last_result, "values": p["values"],
-                              "target_models": {**p["target_models"], "_versions": {m: versions[m] for m in set(p["target_models"].values())}},
-                              "pipeline_run": run_key})
-            for mname, vals in p["per_model"].items():
-                pred_rows.append({"mode": "live", "match_id": p["match_id"], "home_team": p["home_team"],
+            registry = []
+            for m in all_models:
+                cls = FACTORIES[m]
+                used_for = [t for t, mm in selection.items() if mm == m]
+                tm = ev_test[(ev_test.model == m)]
+                registry.append({
+                    "competition": comp, "model_name": m, "model_version": versions[m], "algorithm": getattr(cls, "algorithm", m),
+                    "description": (cls.__doc__ or "").strip().split("\n\n")[0],
+                    "feature_set": _feature_set(m), "config": {"params": configs.get(m, {}), "train_from": TRAIN_FROM,
+                                                             "tuning": json.loads(tuning[tuning.model == m].to_json(orient="records")) if len(tuning) else []},
+                    "training_cutoff": str(last_result.date()), "training_start": TRAIN_FROM,
+                    "training_end": str(data[data.status == "completed"].match_date.max().date()),
+                    "metrics": {"targets_selected": used_for,
+                                "test": {r.target: r._asdict().get(PRIMARY[r.kind]) for r in tm.itertuples()}},
+                    "artifact_location": f"retrained each run from config; code {CODE_VERSION} @ {sha[:7]}",
+                    "status": "production" if used_for else ("retired" if m in REFERENCE_MODELS else "candidate"),
+                })
+            writer.write("epl_model_registry", registry)
+
+            # 7. Predictions
+            pred_rows = []
+            for p in live:
+                pred_rows.append({"competition": comp, "mode": "live", "match_id": p["match_id"], "home_team": p["home_team"],
                                   "away_team": p["away_team"], "kickoff_utc": p["kickoff_utc"],
-                                  "match_date": p["match_date"], "model_name": mname, "model_version": versions[mname],
-                                  "selection_version": selection_version, "data_cutoff": last_result, "values": vals,
-                                  "target_models": None, "pipeline_run": run_key})
-        stage("persist_live", lambda: writer.write("epl_predictions", pred_rows))
-        expl_rows = [{"pipeline_run": run_key, "match_id": p["match_id"], "model_name": p["explanation"]["model_name"],
-                      "model_version": versions[p["explanation"]["model_name"]], "explanation": p["explanation"]}
-                     for p in live if p.get("explanation")]
-        stage("persist_explanations", lambda: writer.write("epl_prediction_explanations", expl_rows))
-        summary["live_predictions"] = len(live)
+                                  "match_date": p["match_date"], "model_name": "selected",
+                                  "model_version": selection_version, "selection_version": selection_version,
+                                  "data_cutoff": last_result, "values": p["values"],
+                                  "target_models": {**p["target_models"], "_versions": {m: versions[m] for m in set(p["target_models"].values())}},
+                                  "pipeline_run": run_key})
+                for mname, vals in p["per_model"].items():
+                    pred_rows.append({"competition": comp, "mode": "live", "match_id": p["match_id"], "home_team": p["home_team"],
+                                      "away_team": p["away_team"], "kickoff_utc": p["kickoff_utc"],
+                                      "match_date": p["match_date"], "model_name": mname, "model_version": versions[mname],
+                                      "selection_version": selection_version, "data_cutoff": last_result, "values": vals,
+                                      "target_models": None, "pipeline_run": run_key})
+            stage(f"{comp}:persist_live", lambda: writer.write("epl_predictions", pred_rows))
+            expl_rows = [{"pipeline_run": run_key, "match_id": p["match_id"], "model_name": p["explanation"]["model_name"],
+                          "model_version": versions[p["explanation"]["model_name"]], "explanation": p["explanation"]}
+                         for p in live if p.get("explanation")]
+            stage(f"{comp}:persist_explanations", lambda: writer.write("epl_prediction_explanations", expl_rows))
+            cs["live_predictions"] = len(live)
 
-        # Backtest predictions are stored once per model version (they are deterministic).
-        bt_rows = []
-        for name in all_models + ["selected"]:
-            ver = versions[name]
-            if writer.remote and read_table("epl_predictions", "prediction_id",
-                                            {"mode": "eq.backtest", "model_name": f"eq.{name}", "model_version": f"eq.{ver}",
-                                             "limit": "1"}):
-                continue
-            for r in fr_all[fr_all.model == name].to_dict("records"):
-                bt_rows.append({"mode": "backtest", "match_id": r["match_id"], "home_team": r["home_team"],
-                                "away_team": r["away_team"], "kickoff_utc": None, "match_date": r["match_date"],
-                                "model_name": name, "model_version": ver, "selection_version": selection_version,
-                                "data_cutoff": pd.Timestamp(r["train_last_date"]).tz_localize("UTC") + pd.Timedelta(hours=23, minutes=59),
-                                "values": r["values"], "target_models": r.get("target_models") if name == "selected" else None,
-                                "pipeline_run": run_key})
-        stage("persist_backtest", lambda: writer.write("epl_predictions", bt_rows))
-        summary["backtest_predictions_written"] = len(bt_rows)
-        summary["timings"] = {k: round(v, 1) for k, v in bt.timings.items()}
-        summary["headline"] = _headline(ev_test, sel)
+            # Backtest predictions are stored once per model version (they are deterministic).
+            bt_rows = []
+            for name in all_models + ["selected"]:
+                ver = versions[name]
+                if writer.remote and read_table("epl_predictions", "prediction_id",
+                                                {"competition": f"eq.{comp}", "mode": "eq.backtest", "model_name": f"eq.{name}", "model_version": f"eq.{ver}",
+                                                 "limit": "1"}):
+                    continue
+                for r in fr_all[fr_all.model == name].to_dict("records"):
+                    bt_rows.append({"competition": comp, "mode": "backtest", "match_id": r["match_id"], "home_team": r["home_team"],
+                                    "away_team": r["away_team"], "kickoff_utc": None, "match_date": r["match_date"],
+                                    "model_name": name, "model_version": ver, "selection_version": selection_version,
+                                    "data_cutoff": pd.Timestamp(r["train_last_date"]).tz_localize("UTC") + pd.Timedelta(hours=23, minutes=59),
+                                    "values": r["values"], "target_models": r.get("target_models") if name == "selected" else None,
+                                    "pipeline_run": run_key})
+            stage(f"{comp}:persist_backtest", lambda: writer.write("epl_predictions", bt_rows))
+            cs["backtest_predictions_written"] = len(bt_rows)
+
+            # 8. Betting evaluation against bookmaker odds (reads predictions, changes none)
+            value_rows = stage(f"{comp}:value_backtest", lambda: value_rows_for(fr_all, ds, selection, versions, run_key, methodology, comp))
+            cs["value_checks"] = comparability(value_rows)
+            stage(f"{comp}:persist_value", lambda: writer.write("epl_value_backtest", value_rows))
+            cs["value_backtest_rows"] = len(value_rows)
+            cs["timings"] = {k: round(v, 1) for k, v in bt.timings.items()}
+            cs["headline"] = _headline(ev_test, sel)
+            if args.out:
+                _local_report(os.path.join(args.out, comp), ev_val, ev_test, sel, tuning, cs, fr_all, live)
+        # The Premier League's summary also stays at the top level, where existing pages read it.
+        summary.update({k: v for k, v in summary["competitions"].get(DEFAULT_COMPETITION, {}).items()})
         status("succeeded")
-        if args.out:
-            _local_report(args.out, ev_val, ev_test, sel, tuning, summary, fr_all, live)
         log("done")
         return 0
     except Exception as e:  # record the failure, then fail the job
         stages["error"] = {"ok": False}
         status("failed", f"{e}\n{traceback.format_exc()[-3000:]}")
         raise
+
+
+def odds_table_rows(ds, writer) -> list[dict]:
+    """One row per completed match with stored odds; rows already stored unchanged are skipped."""
+    m = ds.matches
+    rows = []
+    if "odds" not in m.columns:
+        return rows
+    for r in m[m.status == "completed"][["match_id", "season", "match_date", "odds", "source_url"]].to_dict("records"):
+        odds = r.get("odds")
+        if not isinstance(odds, dict) or not odds:
+            continue
+        h = hashlib.sha256(json.dumps(odds, sort_keys=True).encode()).hexdigest()[:16]
+        rows.append({"match_id": r["match_id"], "season": r["season"], "match_date": pd.Timestamp(r["match_date"]).date(),
+                     "odds": odds, "odds_hash": h, "source": "football-data.co.uk", "source_url": r["source_url"],
+                     "collection_note": ODDS_COLLECTION_NOTE})
+    if writer.remote and rows:
+        have = {(x["match_id"], x["odds_hash"]) for x in read_table("epl_match_odds", "match_id,odds_hash")}
+        rows = [r for r in rows if (r["match_id"], r["odds_hash"]) not in have]
+    return rows
+
+
+ODDS_COLLECTION_NOTE = ("football-data.co.uk: pre-closing odds collected Friday afternoon for weekend games and Tuesday "
+                        "afternoon for midweek games; closing odds are the last available before kickoff. No per-quote "
+                        "timestamps. Average and best are across the bookmakers football-data tracks.")
+
+
+def value_rows_for(fr_all, ds, selection, versions, run_key, methodology, competition: str = "EPL") -> list[dict]:
+    from .value import MARKETS, evaluate as value_evaluate
+
+    existing = {market: selection.get(target) for market, (_, target) in MARKETS.items()}
+    models = {"baseline": "baseline", "market": "market"}
+    for name in set(existing.values()):
+        if name and name not in models:
+            models[name] = name
+    periods = {"validation": VALIDATION_SEASONS, "test": TEST_SEASONS, "live": [LIVE_SEASON]}
+    out = []
+    for r in value_evaluate(fr_all[fr_all.model != "selected"], ds.matches, models, periods):
+        name = r["model_name"]
+        role = ("market" if name == "market" else "existing_model" if existing.get(r["market"]) == name
+                else "baseline" if name == "baseline" else "other")
+        out.append({**{k: v for k, v in r.items() if k != "label"}, "competition": competition, "run_key": run_key, "role": role,
+                    "model_version": "odds" if name == "market" else versions.get(name),
+                    "methodology": "Flat 1-unit stakes on every selection passing the strategy's filters, at the "
+                                   "pre-closing price of the price source. Probabilities from the walk-forward "
+                                   "backtest (" + methodology + ") Strategies fixed in advance, none tuned."})
+    return out
+
+
+def comparability(rows: list[dict]) -> dict:
+    """The three sources of probabilities must be scored on identical matches. Returns the
+    (split, season, market, price source) cells where they are not, which should be none."""
+    cells: dict[tuple, set] = {}
+    for r in rows:
+        key = (r["split"], r["season"], r["market"], r["price_source"])
+        cells.setdefault(key, set()).add((r["eligible_matches"], r["period_start"], r["period_end"]))
+    bad = [list(k) for k, v in cells.items() if len(v) > 1]
+    return {"cells": len(cells), "mismatched": bad}
 
 
 def _feature_set(model: str) -> list[str]:

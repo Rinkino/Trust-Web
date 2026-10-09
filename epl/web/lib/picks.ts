@@ -4,6 +4,8 @@
 export type Outcome = 'H' | 'D' | 'A'
 export const OUTCOMES: Outcome[] = ['H', 'D', 'A']
 
+import { PROP_KEY } from './props.ts'
+
 const KEY = /^[0-9a-f]{64}$/
 const MATCH = /^[0-9]{4}-[0-9]{2}_[a-z0-9-]+_[a-z0-9-]+$/
 
@@ -12,6 +14,9 @@ export type PicksRequest =
   | { action: 'claim'; key: string }
   | { action: 'clear'; key?: string; match_id: string }
   | { action: 'save'; key?: string; match_id: string; pick: Outcome; home_goals?: number; away_goals?: number }
+  | { action: 'list_props' }
+  | { action: 'save_prop'; match_id: string; prop_key: string; label: string; model_prob: number }
+  | { action: 'remove_prop'; match_id: string; prop_key: string }
 
 export function outcomeOfScore(h: number, a: number): Outcome {
   return h > a ? 'H' : h === a ? 'D' : 'A'
@@ -22,8 +27,19 @@ export function outcomeOfScore(h: number, a: number): Outcome {
 export function parsePicksRequest(body: unknown, signedIn = false): { ok: true; req: PicksRequest } | { ok: false; error: string } {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return { ok: false, error: 'body must be a JSON object' }
   const b = body as Record<string, unknown>
-  const allowed = new Set(['action', 'key', 'match_id', 'pick', 'home_goals', 'away_goals'])
+  const allowed = new Set(['action', 'key', 'match_id', 'pick', 'home_goals', 'away_goals', 'prop_key', 'label', 'model_prob'])
   if (Object.keys(b).some(k => !allowed.has(k))) return { ok: false, error: 'unexpected field' }
+  // Saved predictions belong to a signed-in account only.
+  if (b.action === 'list_props' || b.action === 'save_prop' || b.action === 'remove_prop') {
+    if (!signedIn) return { ok: false, error: 'sign in to save predictions' }
+    if (b.action === 'list_props') return { ok: true, req: { action: 'list_props' } }
+    if (typeof b.match_id !== 'string' || !MATCH.test(b.match_id)) return { ok: false, error: 'invalid match' }
+    if (typeof b.prop_key !== 'string' || !PROP_KEY.test(b.prop_key)) return { ok: false, error: 'invalid prediction' }
+    if (b.action === 'remove_prop') return { ok: true, req: { action: 'remove_prop', match_id: b.match_id, prop_key: b.prop_key } }
+    if (typeof b.label !== 'string' || b.label.trim().length === 0 || b.label.length > 120) return { ok: false, error: 'invalid label' }
+    if (typeof b.model_prob !== 'number' || !(b.model_prob >= 0 && b.model_prob <= 1)) return { ok: false, error: 'invalid probability' }
+    return { ok: true, req: { action: 'save_prop', match_id: b.match_id, prop_key: b.prop_key, label: b.label.trim(), model_prob: b.model_prob } }
+  }
   if (b.key !== undefined && (typeof b.key !== 'string' || !KEY.test(b.key))) return { ok: false, error: 'invalid key' }
   const key = b.key as string | undefined
   if (!key && (!signedIn || b.action === 'claim')) return { ok: false, error: b.action === 'claim' ? 'claim needs a key' : 'sign in, or send a key' }

@@ -29,7 +29,7 @@ function describe(key: string, team: string, opponent: string, side: 'home' | 'a
     case 'opp_quality': return `${opponent}'s results and rating`
     case 'venue': return side === 'home' ? `Playing at home` : `Playing away from home`
     case 'schedule': return `Rest days and fixture congestion`
-    case 'promoted': return `Newly promoted sides`
+    case 'promoted': return `Promotion or relegation`
     case 'tempo': return `How open both teams' recent games have been`
     case 'league': return `League-wide scoring level and stage of the season`
     default: return key

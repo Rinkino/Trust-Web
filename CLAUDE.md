@@ -259,7 +259,7 @@ Always work on `dev-1`, merge to `dev`, then `main`.
 ## EPL Statistics Predictor (`epl/`)
 
 A separate project living in this repo: Premier League match-statistics predictions with honest walk-forward
-evaluation. Full docs in `epl/README.md` and `epl/docs/`.
+evaluation. Full docs in `epl/README.md` and `epl/docs/` (betting evaluation: `epl/docs/betting.md`).
 
 - `epl/ml` — Python package `eplpred` (ingest → features → models → walk-forward backtest → selection → live predictions). Tests: `cd epl/ml && python -m pytest -q`.
 - `epl/web` — Next.js app, Vercel project `epl-predictor` (root directory `epl/web`), https://epl-predictor-psi.vercel.app. Google sign-in required for every page (`middleware.ts`; signed-out visitors see `/login`). Home = upcoming fixtures; `/match/<id>` explains a prediction and takes a pick; `/my-picks`; detailed pages live under the `(advanced)` route group. Branch pushes create preview deployments; production needs a production deployment.

@@ -27,7 +27,7 @@ def build_dataset(files: list[RawFile]) -> Dataset:
     fixtures: list[dict] = []
     audit: list[dict] = []
     for f in files:
-        entry = {"source": "football-data.co.uk" if f.kind == "results" else "fixturedownload.com",
+        entry = {"source": ("football-data.co.uk" if f.kind == "results" else "fixturedownload.com") + f" ({f.competition})",
                  "source_url": f.url, "retrieved_at": f.retrieved_at, "http_status": f.status,
                  "bytes": len(f.content), "sha256": f.sha256,
                  "records_retrieved": 0, "records_accepted": 0, "records_rejected": 0, "validation_errors": []}
@@ -35,7 +35,7 @@ def build_dataset(files: list[RawFile]) -> Dataset:
             entry["validation_errors"] = [{"reason": f"HTTP {f.status}"}]
             audit.append(entry)
             continue
-        res = (parse_football_data if f.kind == "results" else parse_fixture_json)(f.content, f.start_year, f.url)
+        res = (parse_football_data if f.kind == "results" else parse_fixture_json)(f.content, f.start_year, f.url, f.competition)
         (results if f.kind == "results" else fixtures).extend(res.rows)
         entry.update(records_retrieved=res.retrieved, records_accepted=len(res.rows), records_rejected=len(res.rejected))
         errs = [{"row": r["row"], "reason": r["reason"]} for r in res.rejected]

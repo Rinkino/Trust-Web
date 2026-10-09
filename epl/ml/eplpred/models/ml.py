@@ -30,7 +30,7 @@ from . import STAT_KEYS, Prediction
 # Per-statistic inputs. Each model sees the team and opponent versions of the
 # statistic's own form features plus general strength, schedule and environment.
 GENERAL = ["elo", "season_ppg", "season_gdpg", "position", "ppg_l5", "ppg_l10", "rest_days", "n7", "n14",
-           "promoted", "hist_n"]
+           "promoted", "hist_n", "from_above", "from_below", "prev_tier_ppg", "prev_tier_gdpg"]
 
 
 def _team_cols(s: str) -> list[str]:
@@ -56,7 +56,7 @@ OUTCOME_FEATURES = (
     + [f"{p}_{c}" for p in ("h", "a") for c in
        ["goals_for_ewm", "goals_ag_ewm", "goals_for_venue", "goals_ag_venue", "sot_for_ewm", "sot_ag_ewm",
         "shots_for_ewm", "shots_ag_ewm", "ppg_l5", "ppg_l10", "season_ppg", "season_gdpg", "position",
-        "promoted", "rest_days", "elo"]]
+        "promoted", "rest_days", "elo", "from_above", "from_below", "prev_tier_ppg", "prev_tier_gdpg"]]
 )
 
 

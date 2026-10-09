@@ -39,6 +39,11 @@ export function setKey(k: string): boolean {
   }
 }
 
+/** Forget the browser key once its picks have moved into the account. */
+export function clearKey() {
+  try { window.localStorage.removeItem(STORAGE) } catch { /* storage blocked: nothing to clear */ }
+}
+
 /** Calls /api/picks as the signed-in user when there is a session, else with the browser key. */
 export async function callPicks<T = any>(body: Record<string, unknown>): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
   const token = await accessToken()

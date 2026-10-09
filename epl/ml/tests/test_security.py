@@ -8,7 +8,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 EPL_TABLES = ["epl_matches", "epl_model_registry", "epl_target_selection", "epl_model_evaluations", "epl_predictions",
-              "epl_demo_runs", "epl_demo_run_items", "epl_data_source_audit", "epl_pipeline_runs"]
+              "epl_demo_runs", "epl_demo_run_items", "epl_data_source_audit", "epl_pipeline_runs",
+              "epl_match_odds", "epl_value_backtest"]
 
 
 def _sql() -> str:

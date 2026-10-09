@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { Reliability, SeasonBars } from '@/components/viz'
+import LeagueTabs from '@/components/LeagueTabs'
+import { leagueOf } from '@/lib/leagues'
 import { latestRun, latestSelection, selectAll, type Evaluation } from '@/lib/db'
 import { day, num, pct, signedPct } from '@/lib/format'
 import { MODEL_LABEL, MODEL_SHORT, TARGETS } from '@/lib/targets'
@@ -15,12 +17,13 @@ type SP = Promise<Record<string, string | undefined>>
 
 export default async function EvaluationPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams
+  const league = leagueOf(sp.league)
   const split = sp.split === 'validation' ? 'validation' : 'test'
   const run = await latestRun()
   if (!run) return <><h1>Model evaluation</h1><p className="muted">No successful pipeline run yet.</p></>
   const [all, selection] = await Promise.all([
-    selectAll<Evaluation>('epl_model_evaluations', { select: '*', run_key: `eq.${run.run_key}` }),
-    latestSelection(),
+    selectAll<Evaluation>('epl_model_evaluations', { select: '*', competition: `eq.${league}`, run_key: `eq.${run.run_key}` }),
+    latestSelection(league),
   ])
   const seasonsAvail = [...new Set(all.filter(e => e.split === split && e.season !== 'ALL').map(e => e.season))].sort()
   const defaultSeason = split === 'test' ? '2025-26' : 'ALL'
@@ -33,13 +36,15 @@ export default async function EvaluationPage({ searchParams }: { searchParams: S
 
   return (
     <>
-      <h1>Model evaluation</h1>
+      <LeagueTabs path="/evaluation" current={league} />
+      <h1 style={{ marginTop: 14 }}>Model evaluation</h1>
       <p className="lede">
         Every model is scored on the same matches. Predictions were made walk-forward: before each gameweek the models
         were retrained on earlier matches only, then predicted that gameweek. {methodology}
       </p>
 
       <form className="filters" method="get">
+        <input type="hidden" name="league" value={league} />
         <label>Split
           <select name="split" defaultValue={split}>
             <option value="test">Test (held out)</option>

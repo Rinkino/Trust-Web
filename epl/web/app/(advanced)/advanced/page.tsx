@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import DemoButton from '@/components/DemoButton'
+import LeagueTabs from '@/components/LeagueTabs'
+import { leagueOf } from '@/lib/leagues'
 import { count, latestRun, latestSelection, select, type Evaluation, type Registry } from '@/lib/db'
 import { num, signedPct, when } from '@/lib/format'
 import { MODEL_LABEL, MODEL_SHORT, PRIMARY, TARGET_BY_KEY, type TargetKind } from '@/lib/targets'
@@ -9,22 +11,23 @@ export const dynamic = 'force-dynamic'
 
 const HEADLINE = ['goals_total', 'outcome', 'goals_over_2_5', 'shots_total', 'sot_total', 'corners_total', 'yellows_total']
 
-export default async function AdvancedOverview() {
+export default async function AdvancedOverview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const league = leagueOf((await searchParams).league)
   const [run, selection, completed, registry] = await Promise.all([
     latestRun(),
-    latestSelection(),
-    count('epl_matches', { status: 'eq.completed' }),
-    select<Registry>('epl_model_registry', { select: '*', order: 'created_at.desc', limit: 40 }),
+    latestSelection(league),
+    count('epl_matches', { competition: `eq.${league}`, status: 'eq.completed' }),
+    select<Registry>('epl_model_registry', { select: '*', competition: `eq.${league}`, order: 'created_at.desc', limit: 40 }),
   ])
   const nowIso = new Date().toISOString()
   const upcoming = await select<{ match_id: string }>('epl_predictions', {
-    select: 'match_id', mode: 'eq.live', model_name: 'eq.selected', kickoff_utc: `gt.${nowIso}`,
+    select: 'match_id', competition: `eq.${league}`, mode: 'eq.live', model_name: 'eq.selected', kickoff_utc: `gt.${nowIso}`,
   })
   const eligible = new Set(upcoming.map(u => u.match_id)).size
   const evals = run
     ? await select<Evaluation>('epl_model_evaluations', {
         select: 'model_name,target,target_kind,mae,log_loss,n_matches,eval_start,eval_end',
-        run_key: `eq.${run.run_key}`, split: 'eq.test', season: 'eq.2025-26', target: `in.(${HEADLINE.join(',')})`,
+        competition: `eq.${league}`, run_key: `eq.${run.run_key}`, split: 'eq.test', season: 'eq.2025-26', target: `in.(${HEADLINE.join(',')})`,
       })
     : []
   const summary = run?.summary ?? {}
@@ -34,7 +37,8 @@ export default async function AdvancedOverview() {
 
   return (
     <>
-      <h1>Advanced statistics</h1>
+      <LeagueTabs path="/advanced" current={league} />
+      <h1 style={{ marginTop: 14 }}>Advanced statistics</h1>
       <p className="lede">
         How the predictions are made and how well they have done. Goals, shots, corners and cards are predicted by several
         models that are compared on matches they had not seen. Every number on this site comes from the running pipeline;
@@ -52,6 +56,7 @@ export default async function AdvancedOverview() {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', margin: '24px 0 8px' }}>
         <DemoButton />
         <Link className="btn ghost" href="/evaluation">Model evaluation</Link>
+        <Link className="btn ghost" href="/betting">Betting vs the market</Link>
         <Link className="btn ghost" href="/predictions">All upcoming numbers</Link>
       </div>
       <p className="note">

@@ -41,6 +41,14 @@ def composite(values_by_model: dict[str, dict], selection: dict[str, str]) -> tu
             pmf = values_by_model.get(model, {}).get(f"{target}_pmf")
             if pmf is not None:  # distribution from the same model as the target
                 values[f"{target}_pmf"] = pmf
+    # Per-team distributions for each statistic, from the model selected for that statistic's
+    # match total, so both teams and the total always come from one model and agree.
+    for s in PMF_STATS:
+        m = selection.get(f"{s}_total")
+        mv = values_by_model.get(m, {}) if m else {}
+        if f"{s}_home_pmf" in mv and f"{s}_away_pmf" in mv:
+            values[f"{s}_sides"] = {"model": m, "home": mv[f"{s}_home_pmf"], "away": mv[f"{s}_away_pmf"]}
+            used[f"{s}_sides"] = m
     # Most likely scorelines come from the model that produced the goal expectations.
     gm = selection.get("goals_home")
     if gm and "top_scorelines" in values_by_model.get(gm, {}):
@@ -84,6 +92,10 @@ def predict_live(data: pd.DataFrame, configs: dict[str, dict], selection: dict[s
             for s in PMF_STATS:
                 if f"{s}_total" in pmfs and f"{s}_total" in vals:
                     vals[f"{s}_total_pmf"] = compact_pmf(pmfs[f"{s}_total"])
+                    # Each team's own distribution, so the site can work out comparisons
+                    # such as "home team gets more corners" from the same model.
+                    vals[f"{s}_home_pmf"] = compact_pmf(pmfs[f"{s}_home"])
+                    vals[f"{s}_away_pmf"] = compact_pmf(pmfs[f"{s}_away"])
             per_model[name][p.match_id] = vals
         if name == selection.get("outcome"):
             explanations = explain(name, model, fixtures)
