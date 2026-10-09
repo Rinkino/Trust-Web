@@ -2,9 +2,10 @@ import Link from 'next/link'
 import { Reliability, SeasonBars } from '@/components/viz'
 import { latestRun, latestSelection, selectAll, type Evaluation } from '@/lib/db'
 import { day, num, pct, signedPct } from '@/lib/format'
-import { MODEL_LABEL, MODEL_ORDER, MODEL_SHORT, PRIMARY, TARGETS, type TargetKind } from '@/lib/targets'
+import { MODEL_LABEL, MODEL_SHORT, TARGETS } from '@/lib/targets'
 
-export const revalidate = 300
+// Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
+export const dynamic = 'force-dynamic'
 
 const COUNT_MODELS = ['baseline', 'team_avg', 'poisson_strength', 'glm', 'hgb']
 const PROB_MODELS = ['baseline', 'team_avg', 'poisson_strength', 'glm', 'hgb']
@@ -259,5 +260,3 @@ function PerSeason({ all }: { all: Evaluation[] }) {
   )
 }
 
-export function primaryOf(kind: TargetKind) { return PRIMARY[kind] }
-void MODEL_ORDER

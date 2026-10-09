@@ -4,7 +4,8 @@ import { count, latestRun, latestSelection, select, type Evaluation, type Regist
 import { num, signedPct, when } from '@/lib/format'
 import { MODEL_LABEL, MODEL_SHORT, PRIMARY, TARGET_BY_KEY, type TargetKind } from '@/lib/targets'
 
-export const revalidate = 300
+// Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
+export const dynamic = 'force-dynamic'
 
 const HEADLINE = ['goals_total', 'outcome', 'goals_over_2_5', 'shots_total', 'sot_total', 'corners_total', 'yellows_total']
 
@@ -28,7 +29,6 @@ export default async function Dashboard() {
     : []
   const summary = run?.summary ?? {}
   const seasons: string[] = summary.data?.seasons ?? []
-  const selByTarget = Object.fromEntries(selection.map(s => [s.target, s]))
   const currentModels = new Map<string, Registry>()
   for (const r of registry) if (!currentModels.has(r.model_name)) currentModels.set(r.model_name, r)
 
@@ -119,7 +119,6 @@ export default async function Dashboard() {
           Selection version <span className="mono">{selection[0].selection_version}</span>, chosen on {selection[0].selection_period}.
           {' '}{selection.filter(s => !s.reliable).length} of {selection.length} targets are flagged as not reliably better
           than the baseline ({selection.filter(s => !s.reliable).map(s => TARGET_BY_KEY[s.target]?.label).join(', ') || 'none'}).
-          {' '}{selByTarget.outcome ? '' : ''}
         </p>
       )}
     </>

@@ -6,7 +6,8 @@ import { loadEvidence } from '@/lib/evidence'
 import { num, pct, when } from '@/lib/format'
 import { GROUPS } from '@/lib/targets'
 
-export const revalidate = 300
+// Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
+export const dynamic = 'force-dynamic'
 
 type SP = Promise<Record<string, string | undefined>>
 const DATE = /^\d{4}-\d{2}-\d{2}$/
