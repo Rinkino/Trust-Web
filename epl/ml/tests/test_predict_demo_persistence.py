@@ -177,3 +177,26 @@ def test_live_predictions_store_total_distributions_from_the_selected_model(leag
         assert p["values"]["corners_total_pmf"] == p["per_model"]["team_avg"]["corners_total_pmf"]
         assert p["values"]["goals_total_pmf"] == p["per_model"]["poisson_strength"]["goals_total_pmf"]
         assert "shots_total_pmf" not in p["values"]  # shots_total not selected here
+
+
+def test_per_team_distributions_come_from_the_total_model_and_add_up_to_it(league):
+    import numpy as np
+
+    m, now = _with_schedule(league)
+    data = m.set_index("match_id").join(build_features(m))
+    selection = {"goals_total": "poisson_strength", "corners_total": "team_avg", "corners_home": "poisson_strength",
+                 "outcome": "baseline"}
+    preds, _ = predict_live(data, {"poisson_strength": {"halflife_days": 240.0, "l2": 2.0}, "team_avg": {}, "baseline": {}},
+                            selection, now=now)
+    for p in preds:
+        sides = p["values"]["corners_sides"]
+        # from the total's model, not from the model selected for the home side
+        assert sides["model"] == "team_avg"
+        assert sides["home"] == p["per_model"]["team_avg"]["corners_home_pmf"]
+        for side in ("home", "away"):
+            assert 0.999 <= sum(sides[side]) <= 1.001
+        # the two teams' distributions add up to the stored total distribution
+        total = np.convolve(sides["home"], sides["away"])
+        stored = p["values"]["corners_total_pmf"]
+        assert np.allclose(total[:len(stored)], stored, atol=2e-3)
+        assert "shots_sides" not in p["values"]
