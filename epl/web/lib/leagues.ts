@@ -5,7 +5,7 @@ export const LEAGUES = {
 export type League = keyof typeof LEAGUES
 
 // Leagues shown on the site: a league is added once its first pipeline run has succeeded.
-export const LEAGUE_CODES: League[] = ['EPL', 'ELC']
+export const LEAGUE_CODES: League[] = ['EPL', 'ELC', 'LALIGA', 'SERIEA', 'BUNDESLIGA', 'LIGUE1']
 
 /** A `?league=` value, defaulting to the Premier League for anything else. */
 export function leagueOf(x: string | null | undefined): League {
