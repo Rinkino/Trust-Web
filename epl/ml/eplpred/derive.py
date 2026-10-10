@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
 
 from .config import STATS, TARGETS
 from .distributions import KMAX, btts, convolve, interval, outcome_probs, pmf, prob_over, score_matrix
@@ -62,7 +63,8 @@ def actual_values(row) -> dict:
 
     def num(c):
         v = row[c]
-        return None if v is None or (isinstance(v, float) and math.isnan(v)) or v != v else float(v)
+        # pd.isna covers None, NaN and pandas' NA (nullable integer columns).
+        return None if pd.isna(v) else float(v)
 
     for s, (h, a) in STATS.items():
         vh, va = num(h), num(a)

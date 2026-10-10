@@ -30,6 +30,11 @@ def _write(tmp, now):
                 lines.append(",".join(str(x) for x in [div, d.strftime("%d/%m/%Y"), "15:00", r["home_team"], r["away_team"], r["fthg"], r["ftag"],
                              r["ftr"], 0, 0, "D", "Ref", r["hs"], r["as"], r["hst"], r["ast"], r["hf"], r["af"], r["hc"], r["ac"],
                              r["hy"], r["ay"], r["hr"], r["ar"], 2.2, 3.3, 3.4, 1.9, 1.9]))
+            if comp == "ELC" and len(lines) > 3:
+                # a blank statistic, as in real lower-division files
+                cells = lines[3].split(",")
+                cells[HEADER.split(",").index("HS")] = ""
+                lines[3] = ",".join(cells)
             (tmp / f"{div}_{y % 100:02d}{(y + 1) % 100:02d}.csv").write_text("\n".join(lines) + "\n")
         # one swap each summer
         out_top, out_low = top[(y % len(top))], low[(y % len(low))]

@@ -62,3 +62,16 @@ def test_previous_season_only_no_same_season_leakage():
     first = f[f.season == "2021-22"]
     # No earlier season exists, so nothing can be carried over in the first season.
     assert (first.h_prev_tier_ppg == 0).all() and (first.a_prev_tier_ppg == 0).all()
+
+
+def test_actual_values_treat_pandas_na_as_missing():
+    """Real lower-division files have the odd blank statistic, read as pd.NA."""
+    import pandas as pd
+    from eplpred.derive import actual_values
+
+    row = pd.Series({"fthg": 2, "ftag": 1, "hs": pd.NA, "as": 9, "hst": 4, "ast": 3,
+                     "hc": 5, "ac": pd.NA, "hy": 1, "ay": 2, "hr": 0, "ar": 0}).astype("Int64")
+    out = actual_values(row)
+    assert out["shots_home"] is None and out["shots_total"] is None
+    assert out["corners_away"] is None and out["corners_total"] is None
+    assert out["goals_total"] == 3.0 and out["outcome"] == 0
