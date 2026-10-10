@@ -72,7 +72,7 @@ export type PredictionRow = {
   prediction_id: string; mode: string; match_id: string; model_name: string; model_version: string
   selection_version: string | null; created_at: string; data_cutoff: string; values: Values
   target_models: Record<string, any> | null; pipeline_run: string
-  season?: string; match_date: string; kickoff_utc: string | null; home_team: string; away_team: string; status?: string
+  season?: string; competition?: string; match_date: string; kickoff_utc: string | null; home_team: string; away_team: string; status?: string
   fthg?: number | null; ftag?: number | null; ftr?: string | null; hs?: number | null; as?: number | null; hst?: number | null
   ast?: number | null; hc?: number | null; ac?: number | null; hy?: number | null; ay?: number | null; hr?: number | null; ar?: number | null
   generated_before_kickoff?: boolean | null
