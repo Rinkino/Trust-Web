@@ -43,7 +43,7 @@ export async function laterFixtures(nowIso: string, predicted: Set<string>, limi
 
 /** How the match-result model did on the held-out 2025/26 season (from the latest run). */
 export async function heldOutResultAccuracy(competition = 'EPL'): Promise<{ accuracy: number; n: number; season: string } | null> {
-  const run = await latestRun()
+  const run = await latestRun(competition)
   if (!run) return null
   const rows = await select<Evaluation>('epl_model_evaluations', {
     select: 'accuracy,n_matches,season', competition: `eq.${competition}`, run_key: `eq.${run.run_key}`, model_name: 'eq.selected', target: 'eq.outcome',

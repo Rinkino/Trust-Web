@@ -115,11 +115,18 @@ def eval_rows(ev: pd.DataFrame, run_key: str, split: str, season: str, versions:
     return out
 
 
+# A run still marked running after this long was killed by the job timeout (150 minutes).
+STALE_AFTER_MINUTES = 180
+
+
 def run(args) -> int:
     log = Log()
     started = datetime.now(timezone.utc)
     sha = git_sha()
+    comps = args.competitions
     run_key = started.strftime("%Y%m%dT%H%M%SZ") + "-" + sha[:7]
+    if comps:  # parallel jobs, one per league group, each record their own run
+        run_key += "-" + "-".join(comps).lower()
     writer = Writer(outdir=args.out)
     stages: dict[str, dict] = {}
     summary: dict = {"code_version": CODE_VERSION, "remote": writer.remote}
@@ -147,13 +154,14 @@ def run(args) -> int:
         if writer.remote:
             stale = [r for r in read_table("epl_pipeline_runs", "run_key,started_at,stages,summary,git_sha,workflow_url",
                                            {"status": "eq.running"})
-                     if r["run_key"] != run_key and pd.Timestamp(r["started_at"]) < pd.Timestamp(started) - pd.Timedelta(minutes=90)]
+                     if r["run_key"] != run_key and pd.Timestamp(r["started_at"]) < pd.Timestamp(started) - pd.Timedelta(minutes=STALE_AFTER_MINUTES)]
             if stale:
                 writer.write("epl_pipeline_runs", [{**r, "status": "failed", "finished_at": None,
                                                     "error": "abandoned: the job ended without reporting (timeout or crash)"}
                                                    for r in stale])
         # 1. Ingest
-        files = stage("download", lambda: download_all() if args.download else load_local(args.raw_dir))
+        files = stage("download", lambda: download_all(competitions=comps) if args.download
+                      else load_local(args.raw_dir, competitions=comps))
         ds = stage("validate", lambda: build_dataset(files))
         now_iso = datetime.now(timezone.utc).isoformat()
         existing = {}
@@ -460,6 +468,42 @@ def _local_report(outdir: str, ev_val, ev_test, sel, tuning, summary, fr_all, li
         json.dump(live, f, indent=1, default=str)
 
 
+def check_names(args) -> int:
+    """Download and validate only, then list every team name no source could map.
+    Writes nothing anywhere: used when adding a league, before its first real run."""
+    files = download_all(competitions=args.competitions) if args.download else load_local(args.raw_dir, competitions=args.competitions)
+    ds = build_dataset(files)
+    unknown: dict[str, dict[str, int]] = {}
+    other: dict[str, int] = {}
+    for a in ds.audit:
+        for e in a.get("validation_errors", []):
+            reason = e.get("reason")
+            if not reason:
+                continue
+            if reason.startswith("unknown team name"):
+                name = reason.split(":", 1)[1].strip()
+                unknown.setdefault(a["source"], {}).setdefault(name, 0)
+                unknown[a["source"]][name] += 1
+            else:
+                other[f"{a['source']}: {reason}"] = other.get(f"{a['source']}: {reason}", 0) + 1
+    lines = ["# Team-name check", ""]
+    for src, names in sorted(unknown.items()):
+        lines.append(f"## {src}: {len(names)} unknown")
+        lines += [f"- {n} ({k} rows)" for n, k in sorted(names.items())]
+    if not unknown:
+        lines.append("Every team name is recognised.")
+    if other:
+        lines += ["", "## Other rejections"] + [f"- {r} ({k})" for r, k in sorted(other.items())[:100]]
+    counts = ds.matches.groupby(["competition", "status"]).size().to_dict()
+    lines += ["", "## Accepted matches"] + [f"- {c} {st}: {n}" for (c, st), n in sorted(counts.items())]
+    text = "\n".join(lines)
+    print(text)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write(text + "\n")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--download", action="store_true", help="download sources (default: read --raw-dir)")
@@ -467,7 +511,14 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None, help="local output directory (reports; JSONL when not uploading)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     ap.add_argument("--quick", action="store_true", help="skip tuning (default configs)")
-    return run(ap.parse_args(argv))
+    ap.add_argument("--competitions", type=lambda v: [c.strip() for c in v.split(",") if c.strip()] or None, default=None,
+                    help="comma-separated competition codes to run (default: all)")
+    ap.add_argument("--check-names", action="store_true", help="only list unrecognised team names; writes nothing")
+    args = ap.parse_args(argv)
+    for c in args.competitions or []:
+        if c not in COMPETITIONS:
+            ap.error(f"unknown competition {c!r}; known: {', '.join(COMPETITIONS)}")
+    return check_names(args) if args.check_names else run(args)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ export default async function EvaluationPage({ searchParams }: { searchParams: S
   const sp = await searchParams
   const league = leagueOf(sp.league)
   const split = sp.split === 'validation' ? 'validation' : 'test'
-  const run = await latestRun()
+  const run = await latestRun(league)
   if (!run) return <><h1>Model evaluation</h1><p className="muted">No successful pipeline run yet.</p></>
   const [all, selection] = await Promise.all([
     selectAll<Evaluation>('epl_model_evaluations', { select: '*', competition: `eq.${league}`, run_key: `eq.${run.run_key}` }),

@@ -35,7 +35,7 @@ def test_team_name_variants_map_to_one_canonical_name():
     assert normalize_team("Spurs") == "Tottenham"
     assert normalize_team("Nottm Forest") == "Nott'm Forest"
     with pytest.raises(UnknownTeam):
-        normalize_team("Real Madrid")
+        normalize_team("Ajax")
 
 
 def test_two_and_four_digit_years():

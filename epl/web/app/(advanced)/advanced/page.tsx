@@ -14,7 +14,7 @@ const HEADLINE = ['goals_total', 'outcome', 'goals_over_2_5', 'shots_total', 'so
 export default async function AdvancedOverview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const league = leagueOf((await searchParams).league)
   const [run, selection, completed, registry] = await Promise.all([
-    latestRun(),
+    latestRun(league),
     latestSelection(league),
     count('epl_matches', { competition: `eq.${league}`, status: 'eq.completed' }),
     select<Registry>('epl_model_registry', { select: '*', competition: `eq.${league}`, order: 'created_at.desc', limit: 40 }),

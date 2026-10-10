@@ -14,6 +14,7 @@ class Competition:
     name: str
     fixture_slug: str    # fixturedownload.com feed name
     tier: int            # 1 = top division; promotion and relegation link neighbouring tiers
+    country: str = "ENG"  # tiers are only linked within a country
 
 
 # Each competition gets its own models, evaluation and held-out season. They are linked
@@ -21,6 +22,12 @@ class Competition:
 COMPETITIONS: dict[str, Competition] = {
     "EPL": Competition("EPL", "E0", "Premier League", "epl", 1),
     "ELC": Competition("ELC", "E1", "Championship", "championship", 2),
+    # Only their top divisions are loaded, so promoted sides there arrive without a
+    # previous-tier record (as in the Premier League before the Championship was added).
+    "LALIGA": Competition("LALIGA", "SP1", "La Liga", "la-liga", 1, "ESP"),
+    "SERIEA": Competition("SERIEA", "I1", "Serie A", "serie-a", 1, "ITA"),
+    "BUNDESLIGA": Competition("BUNDESLIGA", "D1", "Bundesliga", "bundesliga", 1, "GER"),
+    "LIGUE1": Competition("LIGUE1", "F1", "Ligue 1", "ligue-1", 1, "FRA"),
 }
 DEFAULT_COMPETITION = "EPL"
 
