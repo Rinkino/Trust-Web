@@ -6,3 +6,4 @@ Fri Oct  9 01:01:18 UTC 2026
 2026-10-09 first run with the Championship (EPL + ELC)
 2026-10-09 rerun EPL + Championship after test-isolation fix
 2026-10-10 rerun after missing-statistic fix
+2026-10-10 first run for La Liga, Serie A, Bundesliga, Ligue 1; Lincoln added

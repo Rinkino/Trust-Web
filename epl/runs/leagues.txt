@@ -2,3 +2,7 @@
 # promotion and relegation share a line. A group is added here only after its
 # team-name check (workflow input check_names) comes back clean.
 EPL,ELC
+LALIGA
+SERIEA
+BUNDESLIGA
+LIGUE1

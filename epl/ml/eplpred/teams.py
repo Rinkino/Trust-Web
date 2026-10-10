@@ -19,7 +19,7 @@ CANONICAL = {
     # Championship (and its predecessor, the First Division) clubs not listed above
     "Bristol City", "Bristol Rvs", "Burton", "Colchester", "Crewe", "Doncaster", "Gillingham", "Grimsby",
     "Milton Keynes Dons", "Millwall", "Oxford", "Peterboro", "Plymouth", "Preston", "Rotherham", "Scunthorpe",
-    "Southend", "Stockport", "Swindon", "Tranmere", "Walsall", "Wrexham", "Wycombe", "Yeovil",
+    "Southend", "Stockport", "Swindon", "Tranmere", "Walsall", "Wrexham", "Wycombe", "Yeovil", "Lincoln",
     # La Liga
     "Alaves", "Albacete", "Almeria", "Ath Bilbao", "Ath Madrid", "Barcelona", "Betis", "Cadiz", "Celta",
     "Cordoba", "Eibar", "Elche", "Espanol", "Getafe", "Gimnastic", "Girona", "Granada", "Hercules", "Huesca",
@@ -34,7 +34,7 @@ CANONICAL = {
     "Sassuolo", "Siena", "Spal", "Spezia", "Torino", "Treviso", "Udinese", "Venezia", "Verona", "Vicenza",
     # Bundesliga
     "Aachen", "Augsburg", "Bayern Munich", "Bielefeld", "Bochum", "Braunschweig", "Cottbus", "Darmstadt",
-    "Dortmund", "Duisburg", "Ein Frankfurt", "FC Koln", "Fortuna Dusseldorf", "Freiburg", "Greuther Furth",
+    "Dortmund", "Duisburg", "Ein Frankfurt", "Elversberg", "FC Koln", "Fortuna Dusseldorf", "Freiburg", "Greuther Furth",
     "Hamburg", "Hannover", "Hansa Rostock", "Heidenheim", "Hertha", "Hoffenheim", "Holstein Kiel",
     "Ingolstadt", "Kaiserslautern", "Karlsruhe", "Leverkusen", "M'gladbach", "Mainz", "Munich 1860",
     "Nurnberg", "Paderborn", "RB Leipzig", "Schalke 04", "St Pauli", "Stuttgart", "Union Berlin",
@@ -72,7 +72,7 @@ _ALIASES = {
     "southend united": "Southend", "stockport county": "Stockport", "swindon town": "Swindon",
     "tranmere rovers": "Tranmere", "wycombe wanderers": "Wycombe", "yeovil town": "Yeovil",
     "crewe alexandra": "Crewe", "colchester united": "Colchester", "grimsby town": "Grimsby",
-    "burton albion": "Burton", "wrexham afc": "Wrexham", "west brom": "West Brom", "qpr": "QPR",
+    "burton albion": "Burton", "lincoln city": "Lincoln", "wrexham afc": "Wrexham", "west brom": "West Brom", "qpr": "QPR",
     # Spain
     "athletic club": "Ath Bilbao", "athletic bilbao": "Ath Bilbao", "atletico madrid": "Ath Madrid",
     "atletico de madrid": "Ath Madrid", "atl. madrid": "Ath Madrid", "fc barcelona": "Barcelona",
@@ -83,6 +83,7 @@ _ALIASES = {
     "real valladolid": "Valladolid", "real zaragoza": "Zaragoza", "sporting gijon": "Sp Gijon", "real oviedo": "Oviedo",
     "racing santander": "Santander", "ca osasuna": "Osasuna", "getafe cf": "Getafe", "girona fc": "Girona",
     "granada cf": "Granada", "ud las palmas": "Las Palmas", "cd leganes": "Leganes", "levante ud": "Levante",
+    "r. racing club": "Santander", "rc deportivo": "La Coruna", "rcd espanyol de barcelona": "Espanol",
     "elche cf": "Elche", "cadiz cf": "Cadiz", "ud almeria": "Almeria", "sd huesca": "Huesca", "sd eibar": "Eibar",
     "malaga cf": "Malaga", "real murcia": "Murcia", "recreativo huelva": "Recreativo",
     # Italy
@@ -109,6 +110,7 @@ _ALIASES = {
     "1. fc nurnberg": "Nurnberg", "spvgg greuther furth": "Greuther Furth", "arminia bielefeld": "Bielefeld",
     "sc paderborn 07": "Paderborn", "1. fc kaiserslautern": "Kaiserslautern", "karlsruher sc": "Karlsruhe",
     "fc ingolstadt 04": "Ingolstadt", "eintracht braunschweig": "Braunschweig", "energie cottbus": "Cottbus",
+    "sv elversberg": "Elversberg", "sport-club freiburg": "Freiburg",
     "msv duisburg": "Duisburg", "hansa rostock": "Hansa Rostock", "alemannia aachen": "Aachen", "tsv 1860 munchen": "Munich 1860",
     # France
     "paris saint-germain": "Paris SG", "paris saint germain": "Paris SG", "psg": "Paris SG",
@@ -117,7 +119,7 @@ _ALIASES = {
     "stade rennais": "Rennes", "stade rennais fc": "Rennes", "stade de reims": "Reims", "fc nantes": "Nantes",
     "rc strasbourg": "Strasbourg", "rc strasbourg alsace": "Strasbourg", "montpellier hsc": "Montpellier",
     "toulouse fc": "Toulouse", "stade brestois": "Brest", "stade brestois 29": "Brest", "fc lorient": "Lorient",
-    "fc metz": "Metz", "aj auxerre": "Auxerre", "angers sco": "Angers", "le havre ac": "Le Havre",
+    "fc metz": "Metz", "aj auxerre": "Auxerre", "angers sco": "Angers", "le havre ac": "Le Havre", "havre athletic club": "Le Havre", "le mans fc": "Le Mans",
     "as saint-etienne": "St Etienne", "saint-etienne": "St Etienne", "saint etienne": "St Etienne",
     "girondins de bordeaux": "Bordeaux", "fc girondins de bordeaux": "Bordeaux", "clermont foot": "Clermont",
     "estac troyes": "Troyes", "es troyes ac": "Troyes", "sm caen": "Caen", "dijon fco": "Dijon", "nimes olympique": "Nimes",
