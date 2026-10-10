@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 FOOTBALL_DATA_BASE = "https://www.football-data.co.uk/mmz4281"
 FIXTURE_JSON_URL = "https://fixturedownload.com/feed/json/{slug}-{year}"
+# The coming week across many leagues, with kickoff times; same team names as the results files.
+UPCOMING_CSV_URL = "https://www.football-data.co.uk/fixtures.csv"
 
 
 @dataclass(frozen=True)

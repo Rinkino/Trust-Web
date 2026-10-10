@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo
 
-from .config import season_label
+from .config import CURRENT_SEASON_START, season_label
 from .teams import UnknownTeam, normalize_team, slug
 
 LONDON = ZoneInfo("Europe/London")
@@ -318,15 +318,59 @@ def parse_fixture_json(raw: bytes, start_year: int, url: str, competition: str =
     return res
 
 
+def parse_upcoming_csv(raw: bytes, url: str, divisions: dict[str, str]) -> IngestResult:
+    """football-data.co.uk's coming-week list (fixtures.csv): division, date and UK kickoff
+    time of matches across many leagues. Only rows of the given divisions ({'D1': 'BUNDESLIGA'})
+    are kept. Used to correct kickoff times, never to add matches or results."""
+    season = season_label(CURRENT_SEASON_START)
+    res = IngestResult(source="football-data.co.uk (upcoming)", url=url)
+    text = decode(raw).lstrip("\ufeff")
+    reader = csv.reader(io.StringIO(text))
+    try:
+        header = [h.strip() for h in next(reader)]
+    except StopIteration:
+        res.warnings.append("empty file")
+        return res
+    idx = {h: i for i, h in enumerate(header)}
+    for need in ("Div", "Date", "Time", "HomeTeam", "AwayTeam"):
+        if need not in idx:
+            res.warnings.append(f"missing column {need}")
+            return res
+    lo, hi = _season_window(CURRENT_SEASON_START)
+    for lineno, rec in enumerate(reader, start=2):
+        if not rec or not any(c.strip() for c in rec):
+            continue
+        get = lambda k: rec[idx[k]].strip() if idx[k] < len(rec) else ""
+        comp = divisions.get(get("Div"))
+        if comp is None:
+            continue
+        res.retrieved += 1
+        try:
+            d = parse_date(get("Date"))
+            if not (lo <= d <= hi):
+                raise ValueError(f"date {d} outside season {season}")
+            home, away = normalize_team(get("HomeTeam")), normalize_team(get("AwayTeam"))
+            t = get("Time")
+            kt = time.fromisoformat(t if len(t) > 4 else "0" + t)
+            ko = datetime.combine(d, kt, LONDON).astimezone(timezone.utc)
+            res.rows.append({"match_id": make_match_id(season, home, away), "competition": comp,
+                             "match_date": d.isoformat(), "kickoff_time": kt.strftime("%H:%M"),
+                             "kickoff_utc": ko.isoformat()})
+        except (ValueError, UnknownTeam) as e:
+            res.rejected.append({"row": lineno, "reason": str(e), "raw": rec})
+    return res
+
+
 @dataclass
 class MergeReport:
     completed: int = 0
     scheduled: int = 0
     conflicts: list[str] = field(default_factory=list)
     unverified_results: list[str] = field(default_factory=list)
+    kickoffs_corrected: int = 0
 
 
-def merge_sources(results: list[dict], fixtures: list[dict]) -> tuple[list[dict], MergeReport]:
+def merge_sources(results: list[dict], fixtures: list[dict], upcoming: list[dict] | None = None) -> tuple[list[dict], MergeReport]:
     """Combine results and schedule. Results are authoritative; the schedule only adds
     fixtures that have not been played and the UTC kickoff where the results file
     lacks it. Disagreements are reported, never silently resolved."""
@@ -348,6 +392,15 @@ def merge_sources(results: list[dict], fixtures: list[dict]) -> tuple[list[dict]
             # keep as scheduled (ineligible because kickoff has passed) until verified.
             rep.unverified_results.append(mid)
         by_id[mid] = row
+    # The schedule feed can carry a placeholder (00:00 on the round's first day) until
+    # kickoff times are announced; the coming-week list has the real date and time.
+    for u in upcoming or []:
+        r = by_id.get(u["match_id"])
+        if r is None or r.get("status") != "scheduled" or r.get("competition") != u["competition"]:
+            continue
+        if (r.get("kickoff_utc"), r.get("match_date")) != (u["kickoff_utc"], u["match_date"]):
+            r["kickoff_utc"], r["kickoff_time"], r["match_date"] = u["kickoff_utc"], u["kickoff_time"], u["match_date"]
+            rep.kickoffs_corrected += 1
     rows = sorted(by_id.values(), key=lambda r: (r["match_date"], r.get("kickoff_utc") or "", r["match_id"]))
     rep.completed = sum(r["status"] == "completed" for r in rows)
     rep.scheduled = sum(r["status"] == "scheduled" for r in rows)

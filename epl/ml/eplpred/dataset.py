@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from .fetch import RawFile
-from .ingest import MergeReport, merge_sources, parse_fixture_json, parse_football_data
+from .config import COMPETITIONS
+from .ingest import MergeReport, merge_sources, parse_fixture_json, parse_football_data, parse_upcoming_csv
 
 STAT_COLS = ["fthg", "ftag", "hthg", "htag", "hs", "as", "hst", "ast", "hc", "ac", "hf", "af", "hy", "ay", "hr", "ar"]
 
@@ -25,9 +26,12 @@ class Dataset:
 def build_dataset(files: list[RawFile]) -> Dataset:
     results: list[dict] = []
     fixtures: list[dict] = []
+    upcoming: list[dict] = []
     audit: list[dict] = []
     for f in files:
-        entry = {"source": ("football-data.co.uk" if f.kind == "results" else "fixturedownload.com") + f" ({f.competition})",
+        source = {"results": "football-data.co.uk", "fixtures": "fixturedownload.com",
+                  "upcoming": "football-data.co.uk upcoming"}[f.kind]
+        entry = {"source": f"{source} ({f.competition})",
                  "source_url": f.url, "retrieved_at": f.retrieved_at, "http_status": f.status,
                  "bytes": len(f.content), "sha256": f.sha256,
                  "records_retrieved": 0, "records_accepted": 0, "records_rejected": 0, "validation_errors": []}
@@ -35,8 +39,13 @@ def build_dataset(files: list[RawFile]) -> Dataset:
             entry["validation_errors"] = [{"reason": f"HTTP {f.status}"}]
             audit.append(entry)
             continue
-        res = (parse_football_data if f.kind == "results" else parse_fixture_json)(f.content, f.start_year, f.url, f.competition)
-        (results if f.kind == "results" else fixtures).extend(res.rows)
+        if f.kind == "upcoming":
+            wanted = f.competition.split(",")
+            res = parse_upcoming_csv(f.content, f.url, {c.division: c.code for c in COMPETITIONS.values() if c.code in wanted})
+            upcoming.extend(res.rows)
+        else:
+            res = (parse_football_data if f.kind == "results" else parse_fixture_json)(f.content, f.start_year, f.url, f.competition)
+            (results if f.kind == "results" else fixtures).extend(res.rows)
         entry.update(records_retrieved=res.retrieved, records_accepted=len(res.rows), records_rejected=len(res.rejected))
         errs = [{"row": r["row"], "reason": r["reason"]} for r in res.rejected]
         errs += [{"warning": w} for w in res.warnings[:50]]
@@ -45,7 +54,7 @@ def build_dataset(files: list[RawFile]) -> Dataset:
         entry["validation_errors"] = errs
         audit.append(entry)
 
-    rows, rep = merge_sources(results, fixtures)
+    rows, rep = merge_sources(results, fixtures, upcoming)
     df = pd.DataFrame(rows)
     df["match_date"] = pd.to_datetime(df["match_date"])
     df["kickoff_utc"] = pd.to_datetime(df["kickoff_utc"], utc=True)
