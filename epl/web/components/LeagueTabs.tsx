@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { LEAGUES, LEAGUE_CODES, type League } from '@/lib/leagues'
 
-/** Premier League | Championship switch for a page, keeping its path. */
+/** League switch for a page, keeping its path. */
 export default function LeagueTabs({ path, current }: { path: string; current: League }) {
   return (
     <div className="tabs league-tabs" role="tablist" aria-label="League">

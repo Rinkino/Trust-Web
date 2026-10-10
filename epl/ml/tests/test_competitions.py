@@ -62,3 +62,58 @@ def test_previous_season_only_no_same_season_leakage():
     first = f[f.season == "2021-22"]
     # No earlier season exists, so nothing can be carried over in the first season.
     assert (first.h_prev_tier_ppg == 0).all() and (first.a_prev_tier_ppg == 0).all()
+
+
+def test_actual_values_treat_pandas_na_as_missing():
+    """Real lower-division files have the odd blank statistic, read as pd.NA."""
+    import pandas as pd
+    from eplpred.derive import actual_values
+
+    row = pd.Series({"fthg": 2, "ftag": 1, "hs": pd.NA, "as": 9, "hst": 4, "ast": 3,
+                     "hc": 5, "ac": pd.NA, "hy": 1, "ay": 2, "hr": 0, "ar": 0}).astype("Int64")
+    out = actual_values(row)
+    assert out["shots_home"] is None and out["shots_total"] is None
+    assert out["corners_away"] is None and out["corners_total"] is None
+    assert out["goals_total"] == 3.0 and out["outcome"] == 0
+
+
+def test_divisions_only_link_within_a_country():
+    """A club that played in the Championship last season is not 'promoted' into La Liga."""
+    rng = np.random.default_rng(5)
+    rows = []
+    for r in make_season(2021, rng, LOW):
+        r["competition"] = "ELC"
+        rows.append(r)
+    spain = ["Barcelona", "Real Madrid", "Sevilla", "Betis", "Valencia", "Leeds"]   # Leeds: artificial overlap
+    for r in make_season(2022, rng, spain):
+        r["competition"] = "LALIGA"
+        rows.append(r)
+    m = to_frame(rows)
+    f = build_features(m).join(m.set_index("match_id")[["season", "home_team", "competition"]])
+    leeds = f[(f.competition == "LALIGA") & (f.home_team == "Leeds")]
+    assert len(leeds) and (leeds.h_from_below == 0).all() and (leeds.h_prev_tier_ppg == 0).all()
+
+
+def test_check_names_lists_unknown_teams_and_writes_nothing(tmp_path, capsys):
+    from eplpred.pipeline import main
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    header = "Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,HS,AS,HST,AST,HC,AC,HY,AY,HR,AR"
+    lines = [header,
+             "SP1,15/08/2025,20:00,Barcelona,Atlantis CF,2,0,H,10,5,4,2,6,3,1,2,0,0",
+             "SP1,16/08/2025,20:00,Sevilla,Betis,1,1,D,9,9,3,3,4,4,2,2,0,0"]
+    (raw / "SP1_2526.csv").write_text("\n".join(lines) + "\n")
+    assert main(["--raw-dir", str(raw), "--check-names", "--competitions", "LALIGA"]) == 0
+    out = capsys.readouterr().out
+    assert "Atlantis CF" in out and "1 unknown" in out
+    assert "LALIGA completed: 1" in out
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["raw"]   # nothing written
+
+
+def test_unknown_competition_is_refused():
+    import pytest
+    from eplpred.pipeline import main
+
+    with pytest.raises(SystemExit):
+        main(["--check-names", "--competitions", "MLS"])

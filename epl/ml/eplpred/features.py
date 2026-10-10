@@ -343,9 +343,12 @@ def build_features(matches: pd.DataFrame, cfg: FeatureConfig | None = None) -> p
         comp = matches.competition.iloc[0] if "competition" in matches.columns and len(matches) else "EPL"
         tiers = {c.code: c.tier for c in COMPETITIONS.values()}
         return FeatureBuilder(cfg, tiers.get(comp, 1), season_records(matches, tiers)).run(matches)
-    tiers = {c.code: c.tier for c in COMPETITIONS.values()}
-    records = season_records(matches, tiers)
-    parts = [FeatureBuilder(cfg, tiers.get(comp, 1), records).run(g) for comp, g in matches.groupby("competition")]
+    parts = []
+    for comp, g in matches.groupby("competition"):
+        # Promotion and relegation only link divisions of the same country.
+        country = COMPETITIONS[comp].country if comp in COMPETITIONS else None
+        tiers = {c.code: c.tier for c in COMPETITIONS.values() if c.country == country}
+        parts.append(FeatureBuilder(cfg, tiers.get(comp, 1), season_records(matches, tiers)).run(g))
     return pd.concat(parts)
 
 

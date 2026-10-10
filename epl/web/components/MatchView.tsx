@@ -32,6 +32,8 @@ export default function MatchView({ d }: { d: MatchData }) {
     <>
       {d.outcome && <ResultBlock d={d} />}
 
+      {statsAvailable.length > 0 && <ExpectedTable d={d} stats={statsAvailable} />}
+
       <section className="block">
         <div className="block-head">
           <h2>Top picks for this match</h2>
@@ -90,6 +92,51 @@ function ResultBlock({ d }: { d: MatchData }) {
       {d.topScore && (
         <p className="center small">Most likely score <strong className="mono">{d.home} {d.topScore[0]}–{d.topScore[1]} {d.away}</strong> <span className="muted">({pct(d.topScore[2])})</span></p>
       )}
+    </section>
+  )
+}
+
+const ACTUAL_KEYS: Record<Stat, [string, string]> = {
+  goals: ['fthg', 'ftag'], shots: ['hs', 'as'], sot: ['hst', 'ast'], corners: ['hc', 'ac'], yellows: ['hy', 'ay'],
+}
+
+/** Every statistic at a glance: each team's expected number, then the match total. */
+function ExpectedTable({ d, stats }: { d: MatchData; stats: Stat[] }) {
+  const actual = (s: Stat, i: 0 | 1) => d.actual?.[ACTUAL_KEYS[s][i]] ?? null
+  const cell = (e: number, a: number | null) => (
+    <td className="num">
+      <strong>{e.toFixed(1)}</strong>
+      {a != null && <span className="exp-act"> · {a}</span>}
+    </td>
+  )
+  return (
+    <section className="block">
+      <div className="block-head">
+        <h2>Expected numbers</h2>
+        <span className="small muted">{d.actual ? 'Expected · actual' : 'Average the model expects'}</span>
+      </div>
+      <div className="table-wrap">
+        <table className="exp-table">
+          <thead>
+            <tr><th /><th className="num">{d.home}</th><th className="num">{d.away}</th><th className="num">Total</th></tr>
+          </thead>
+          <tbody>
+            {stats.map(s => {
+              const sd = d.sides[s]!
+              const eh = mean(sd.home), ea = mean(sd.away)
+              const ah = actual(s, 0), aa = actual(s, 1)
+              return (
+                <tr key={s}>
+                  <th scope="row">{STAT_INFO[s].name}</th>
+                  {cell(eh, ah)}
+                  {cell(ea, aa)}
+                  {cell(eh + ea, ah != null && aa != null ? ah + aa : null)}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </section>
   )
 }

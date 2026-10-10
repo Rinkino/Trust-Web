@@ -1,70 +1,100 @@
 import Link from 'next/link'
-import LocalTime from '@/components/LocalTime'
-import LeagueTabs from '@/components/LeagueTabs'
 import MatchCard from '@/components/MatchCard'
-import { LEAGUES, leagueOf } from '@/lib/leagues'
-import { heldOutResultAccuracy, laterFixtures, ukDay, upcomingPredictions, type FixtureRow } from '@/lib/live'
+import { LEAGUES, LEAGUE_CODES, type League } from '@/lib/leagues'
+import { heldOutResultAccuracy, ukDay, ukDayKey, upcomingPredictions, type FixtureRow } from '@/lib/live'
 
 // Rendered per request; the underlying fetches are cached for 5 minutes (lib/db.ts).
 export const dynamic = 'force-dynamic'
 
+type Filter = League | 'ALL'
+
+/** Home: one match day at a time, for one league or all of them. */
 export default async function Home({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const league = leagueOf((await searchParams).league)
-  const now = new Date().toISOString()
-  const [preds, acc] = await Promise.all([upcomingPredictions(now, league), heldOutResultAccuracy(league)])
-  const later = await laterFixtures(now, new Set(preds.map(p => p.match_id)), 10, league)
-  const days = new Map<string, FixtureRow[]>()
+  const sp = await searchParams
+  const league: Filter = sp.league && (LEAGUE_CODES as string[]).includes(sp.league) ? (sp.league as League) : 'ALL'
+  const now = new Date()
+  const preds = await upcomingPredictions(now.toISOString(), league === 'ALL' ? LEAGUE_CODES : league)
+  const acc = league === 'ALL' ? null : await heldOutResultAccuracy(league)
+
+  // Match days with at least one prediction, in order.
+  const byDay = new Map<string, FixtureRow[]>()
   for (const p of preds) {
-    const d = p.kickoff_utc ? ukDay(p.kickoff_utc) : p.match_date
-    days.set(d, [...(days.get(d) ?? []), p])
+    const k = p.kickoff_utc ? ukDayKey(p.kickoff_utc) : p.match_date
+    byDay.set(k, [...(byDay.get(k) ?? []), p])
   }
+  const days = [...byDay.keys()]
+  const day = sp.day && byDay.has(sp.day) ? sp.day : days[0]
+  const list = day ? byDay.get(day)! : []
+
+  // Matches of the chosen day, grouped by league when showing all of them.
+  const groups = new Map<string, FixtureRow[]>()
+  for (const p of list) {
+    const c = p.competition ?? 'EPL'
+    groups.set(c, [...(groups.get(c) ?? []), p])
+  }
+  const leagueOrder = (c: string) => (LEAGUE_CODES as string[]).indexOf(c)
+  const ordered = [...groups.entries()].sort((a, b) => leagueOrder(a[0]) - leagueOrder(b[0]))
+
+  const href = (l: Filter, d?: string) => {
+    const q = new URLSearchParams()
+    if (l !== 'ALL') q.set('league', l)
+    if (d) q.set('day', d)
+    const s = q.toString()
+    return s ? `/?${s}` : '/'
+  }
+  const todayKey = ukDayKey(now.toISOString())
+  const tomorrowKey = ukDayKey(new Date(now.getTime() + 86400000).toISOString())
+  const dayLabel = (k: string) => k === todayKey ? 'Today' : k === tomorrowKey ? 'Tomorrow'
+    : new Date(`${k}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 
   return (
     <>
-      <LeagueTabs path="/" current={league} />
-      <h1 style={{ marginTop: 14 }}>Upcoming {LEAGUES[league]} matches</h1>
-      <p className="lede">
-        For each match the model gives the chance of a home win, a draw and an away win, and its most likely score. Open a
-        match to see why, then make your own pick.
-      </p>
+      <h1>Upcoming matches</h1>
 
-      <div className="callout info">
-        <strong>How to read the percentages.</strong> They are chances, not certainties: a team given 60% is expected to win
-        about 6 times in 10 such games and not win the other 4.
-        {acc ? <> On the 2025/26 season, which the model never saw during development, its most likely result was right in{' '}
-          <strong>{Math.round(acc.accuracy * 100)}%</strong> of {acc.n} matches.</> : null}{' '}
-        <Link href={league === 'EPL' ? '/evaluation' : `/evaluation?league=${league}`}>How it was tested</Link>.
-      </div>
-
-      {preds.length === 0 ? (
-        <p className="muted" style={{ marginTop: 20 }}>
-          No predictions are published right now. Predictions appear for fixtures in the next three weeks after each daily update.
-        </p>
-      ) : [...days.entries()].map(([day, list]) => (
-        <section key={day}>
-          <h2>{day}</h2>
-          <div className="grid matches">
-            {list.map(p => <MatchCard key={p.match_id} p={p} />)}
-          </div>
-        </section>
-      ))}
-
-      {later.length > 0 && (
-        <section>
-          <h2>Later fixtures</h2>
-          <p className="small muted" style={{ marginBottom: 8 }}>
-            Predictions for these are published once they are within three weeks, so they use the latest results.
-          </p>
-          <ul className="later">
-            {later.map(f => (
-              <li key={f.match_id}>
-                <span className="small muted"><LocalTime iso={f.kickoff_utc} /></span>
-                <span>{f.home_team} v {f.away_team}</span>
-              </li>
+      <nav className="filters" aria-label="Filter matches">
+        <div className="filter-row" role="group" aria-label="Competition">
+          {(['ALL', ...LEAGUE_CODES] as Filter[]).map(l => (
+            <Link key={l} href={href(l)} className={`fchip${l === league ? ' on' : ''}`} aria-current={l === league ? 'true' : undefined}>
+              {l === 'ALL' ? 'All leagues' : LEAGUES[l]}
+            </Link>
+          ))}
+        </div>
+        {days.length > 0 && (
+          <div className="filter-row days" role="group" aria-label="Day">
+            {days.map(k => (
+              <Link key={k} href={href(league, k)} className={`fchip day${k === day ? ' on' : ''}`} aria-current={k === day ? 'true' : undefined}>
+                <span>{dayLabel(k)}</span>
+                <span className="fchip-n">{byDay.get(k)!.length}</span>
+              </Link>
             ))}
-          </ul>
-        </section>
+          </div>
+        )}
+      </nav>
+
+      {!day ? (
+        <p className="muted" style={{ marginTop: 20 }}>
+          No predictions are published right now. They appear for matches in the next three weeks after each daily update.
+        </p>
+      ) : (
+        <>
+          <h2 className="day-h">{ukDay(`${day}T12:00:00Z`)}</h2>
+          {ordered.map(([c, ms]) => (
+            <section key={c}>
+              {league === 'ALL' && <h3 className="league-h">{LEAGUES[c as League] ?? c}</h3>}
+              <div className="grid matches">
+                {ms.map(p => <MatchCard key={p.match_id} p={p} />)}
+              </div>
+            </section>
+          ))}
+        </>
       )}
+
+      <p className="hint" style={{ marginTop: 20 }}>
+        Percentages are chances, not certainties: 60% means about 6 times in 10.
+        {acc ? <> On 2025/26, a season the model never saw while it was built, its most likely {LEAGUES[league as League]} result was
+          right in <strong>{Math.round(acc.accuracy * 100)}%</strong> of {acc.n} matches.</> : null}{' '}
+        <Link href={league === 'ALL' || league === 'EPL' ? '/evaluation' : `/evaluation?league=${league}`}>How it was tested</Link>.
+      </p>
     </>
   )
 }

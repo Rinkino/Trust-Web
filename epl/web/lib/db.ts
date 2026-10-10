@@ -72,7 +72,7 @@ export type PredictionRow = {
   prediction_id: string; mode: string; match_id: string; model_name: string; model_version: string
   selection_version: string | null; created_at: string; data_cutoff: string; values: Values
   target_models: Record<string, any> | null; pipeline_run: string
-  season?: string; match_date: string; kickoff_utc: string | null; home_team: string; away_team: string; status?: string
+  season?: string; competition?: string; match_date: string; kickoff_utc: string | null; home_team: string; away_team: string; status?: string
   fthg?: number | null; ftag?: number | null; ftr?: string | null; hs?: number | null; as?: number | null; hst?: number | null
   ast?: number | null; hc?: number | null; ac?: number | null; hy?: number | null; ay?: number | null; hr?: number | null; ar?: number | null
   generated_before_kickoff?: boolean | null
@@ -83,9 +83,13 @@ export type Registry = {
   metrics: any; artifact_location: string | null; status: string; created_at: string
 }
 
-export async function latestRun(): Promise<PipelineRun | null> {
-  const rows = await select<PipelineRun>('epl_pipeline_runs', { select: '*', status: 'eq.succeeded', order: 'finished_at.desc', limit: 1 })
-  return rows[0] ?? null
+/** The latest successful run that covered this competition. Leagues run in parallel jobs,
+ * each recording its own run; runs from before that recorded only the Premier League. */
+export async function latestRun(competition = 'EPL'): Promise<PipelineRun | null> {
+  const base = { select: '*', status: 'eq.succeeded', order: 'finished_at.desc', limit: 1 }
+  const rows = await select<PipelineRun>('epl_pipeline_runs', { ...base, [`summary->competitions->${competition}`]: 'not.is.null' })
+  if (rows[0] || competition !== 'EPL') return rows[0] ?? null
+  return (await select<PipelineRun>('epl_pipeline_runs', base))[0] ?? null
 }
 
 export async function latestSelection(competition = 'EPL'): Promise<Selection[]> {

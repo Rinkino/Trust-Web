@@ -1,4 +1,4 @@
-import { latestRun, select, type Evaluation, type PredictionRow, type Values } from '@/lib/db'
+import { latestRun, select, selectAll, type Evaluation, type PredictionRow, type Values } from '@/lib/db'
 
 /** A 'selected' prediction plus the values of the single model behind its result
  * probabilities, stored by the same pipeline run. Beginner pages show that model's
@@ -22,14 +22,27 @@ export async function withResultModel(rows: PredictionRow[]): Promise<FixtureRow
 }
 
 /** The latest stored pre-kickoff 'selected' prediction for every fixture not yet started. */
-export async function upcomingPredictions(nowIso: string, competition = 'EPL'): Promise<FixtureRow[]> {
-  const rows = await select<PredictionRow>('epl_predictions', {
-    select: 'prediction_id,match_id,home_team,away_team,kickoff_utc,match_date,created_at,data_cutoff,values,target_models,pipeline_run,model_version,mode,model_name,selection_version',
-    competition: `eq.${competition}`, mode: 'eq.live', model_name: 'eq.selected', kickoff_utc: `gt.${nowIso}`, order: 'kickoff_utc.asc,created_at.desc',
+/** The latest published prediction for every upcoming match in one or more competitions.
+ * Predictions are insert-only (one per match per daily run), so the latest ids are found
+ * with a light query first and only those rows are fetched in full. */
+export async function upcomingPredictions(nowIso: string, competition: string | string[] = 'EPL'): Promise<FixtureRow[]> {
+  const comps = Array.isArray(competition) ? competition : [competition]
+  const filter = { competition: `in.(${comps.join(',')})`, mode: 'eq.live', model_name: 'eq.selected', kickoff_utc: `gt.${nowIso}` }
+  const ids = await selectAll<{ prediction_id: string; match_id: string }>('epl_predictions', {
+    select: 'prediction_id,match_id', ...filter, order: 'kickoff_utc.asc,created_at.desc',
   })
-  const latest = new Map<string, PredictionRow>()
-  for (const r of rows) if (!latest.has(r.match_id)) latest.set(r.match_id, r)
-  return withResultModel([...latest.values()])
+  const latest = new Map<string, string>()
+  for (const r of ids) if (!latest.has(r.match_id)) latest.set(r.match_id, r.prediction_id)
+  const wanted = [...latest.values()]
+  const rows: PredictionRow[] = []
+  for (let i = 0; i < wanted.length; i += 100) {
+    rows.push(...await select<PredictionRow>('epl_predictions', {
+      select: 'prediction_id,match_id,competition,home_team,away_team,kickoff_utc,match_date,created_at,data_cutoff,values,target_models,pipeline_run,model_version,mode,model_name,selection_version',
+      prediction_id: `in.(${wanted.slice(i, i + 100).join(',')})`,
+    }))
+  }
+  rows.sort((a, b) => (a.kickoff_utc ?? '').localeCompare(b.kickoff_utc ?? '') || a.home_team.localeCompare(b.home_team))
+  return withResultModel(rows)
 }
 
 /** Scheduled fixtures that have no published prediction yet (beyond the prediction window). */
@@ -43,7 +56,7 @@ export async function laterFixtures(nowIso: string, predicted: Set<string>, limi
 
 /** How the match-result model did on the held-out 2025/26 season (from the latest run). */
 export async function heldOutResultAccuracy(competition = 'EPL'): Promise<{ accuracy: number; n: number; season: string } | null> {
-  const run = await latestRun()
+  const run = await latestRun(competition)
   if (!run) return null
   const rows = await select<Evaluation>('epl_model_evaluations', {
     select: 'accuracy,n_matches,season', competition: `eq.${competition}`, run_key: `eq.${run.run_key}`, model_name: 'eq.selected', target: 'eq.outcome',
@@ -54,6 +67,11 @@ export async function heldOutResultAccuracy(competition = 'EPL'): Promise<{ accu
 }
 
 /** Calendar day of a kickoff in UK time, for grouping fixtures into match days. */
+/** The same day as a sortable key (YYYY-MM-DD), for links and filters. */
+export function ukDayKey(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+}
+
 export function ukDay(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' })
 }
