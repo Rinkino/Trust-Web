@@ -12,14 +12,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import ALL_SEASONS, COMPETITIONS, CURRENT_SEASON_START, fixture_url, football_data_url, season_start_year
+from .config import ALL_SEASONS, COMPETITIONS, CURRENT_SEASON_START, UPCOMING_CSV_URL, fixture_url, football_data_url, season_start_year
 
 USER_AGENT = "TrustWeb-EPL-research/1.0 (+https://github.com/Rinkino/Trust-Web)"
 
 
 @dataclass
 class RawFile:
-    kind: str            # 'results' | 'fixtures'
+    kind: str            # 'results' | 'fixtures' | 'upcoming'
     start_year: int
     url: str
     status: int
@@ -58,6 +58,9 @@ def download_all(seasons: list[str] | None = None, competitions: list[str] | Non
         url = fixture_url(CURRENT_SEASON_START, comp)
         status, body = _get(url)
         out.append(RawFile("fixtures", CURRENT_SEASON_START, url, status, body, datetime.now(timezone.utc).isoformat(), comp))
+    status, body = _get(UPCOMING_CSV_URL)
+    out.append(RawFile("upcoming", CURRENT_SEASON_START, UPCOMING_CSV_URL, status, body,
+                       datetime.now(timezone.utc).isoformat(), ",".join(competitions or list(COMPETITIONS))))
     return out
 
 
@@ -78,4 +81,9 @@ def load_local(directory: str | Path, seasons: list[str] | None = None, competit
         if p.exists():
             out.append(RawFile("fixtures", CURRENT_SEASON_START, fixture_url(CURRENT_SEASON_START, comp), 200,
                                p.read_bytes(), datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat(), comp))
+    p = d / "fixtures.csv"
+    if p.exists():
+        out.append(RawFile("upcoming", CURRENT_SEASON_START, UPCOMING_CSV_URL, 200, p.read_bytes(),
+                           datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat(),
+                           ",".join(competitions or list(COMPETITIONS))))
     return out

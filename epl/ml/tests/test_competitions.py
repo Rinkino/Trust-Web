@@ -117,3 +117,27 @@ def test_unknown_competition_is_refused():
 
     with pytest.raises(SystemExit):
         main(["--check-names", "--competitions", "MLS"])
+
+
+def test_upcoming_list_replaces_placeholder_kickoffs():
+    """The schedule feed can show 00:00 on the round's first day before times are set;
+    football-data's coming-week list then gives the real date and UK kickoff time."""
+    from eplpred.ingest import merge_sources, parse_upcoming_csv
+
+    csv_text = ("Div,Date,Time,HomeTeam,AwayTeam,AvgH\n"
+                "D1,10/10/2026,14:30,Dortmund,Werder Bremen,1.6\n"
+                "D1,10/10/2026,17:30,Hoffenheim,Hamburg,1.9\n"
+                "E0,10/10/2026,12:30,Arsenal,Chelsea,2.0\n"          # another league: ignored
+                "D1,11/10/2026,15:30,Atlantis,Hamburg,2.0\n")        # unknown team: rejected
+    up = parse_upcoming_csv(csv_text.encode(), "u", {"D1": "BUNDESLIGA"})
+    assert len(up.rows) == 2 and len(up.rejected) == 1
+    placeholder = {"status": "scheduled", "competition": "BUNDESLIGA", "season": "2026-27",
+                   "match_date": "2026-10-09", "kickoff_time": "01:00", "kickoff_utc": "2026-10-09T00:00:00+00:00"}
+    fixtures = [{**placeholder, "match_id": "2026-27_dortmund_werder-bremen", "home_team": "Dortmund", "away_team": "Werder Bremen"}]
+    played = {**placeholder, "match_id": "2026-27_hoffenheim_hamburg", "status": "completed", "fthg": 1, "ftag": 0}
+    rows, rep = merge_sources([played], fixtures, up.rows)
+    by = {r["match_id"]: r for r in rows}
+    d = by["2026-27_dortmund_werder-bremen"]
+    assert d["match_date"] == "2026-10-10" and d["kickoff_utc"] == "2026-10-10T13:30:00+00:00" and d["kickoff_time"] == "14:30"
+    assert by["2026-27_hoffenheim_hamburg"]["kickoff_utc"] == "2026-10-09T00:00:00+00:00"   # results are never moved
+    assert rep.kickoffs_corrected == 1

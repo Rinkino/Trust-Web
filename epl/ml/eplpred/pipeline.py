@@ -190,6 +190,7 @@ def run(args) -> int:
                            "seasons": sorted(ds.matches.season.unique().tolist()),
                            "last_result_date": str(ds.completed.match_date.max().date()),
                            "match_rows_written": len(mrows), "result_conflicts": len(conflicts),
+                           "kickoffs_corrected": ds.merge.kickoffs_corrected if ds.merge else 0,
                            "coverage": json.loads(cov.to_json(orient="index"))}
         log(f"data: {summary['data']['completed']} completed, {summary['data']['scheduled']} scheduled, "
             f"{len(mrows)} rows written, {len(conflicts)} conflicts")
