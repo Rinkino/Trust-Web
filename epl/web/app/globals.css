@@ -296,3 +296,10 @@ details.more[open] summary { border-bottom: 1px solid var(--border); }
 .fchip.on .fchip-n { color: inherit; }
 .day-h { margin-top: 18px; }
 .league-h { margin: 18px 0 8px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Likeliest exact scores */
+.score-opt { margin-left: 8px; white-space: nowrap; }
+.scores { display: grid; justify-items: center; gap: 6px; margin-top: 12px; text-align: center; }
+.score-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.score-chip { padding: 6px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); font-size: 14px; }
+.score-chip:first-child { border-color: var(--accent); }

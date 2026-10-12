@@ -64,7 +64,7 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
   const v = p?.values
   const rv = p?.resultModel?.values ?? v
   const outcome = (v?.outcome as number[] | undefined) ?? null
-  const top = ((rv?.top_scorelines as number[][] | undefined) ?? [])[0]
+  const tops = ((rv?.top_scorelines as number[][] | undefined) ?? []).slice(0, 3)
   const e = expl[0]?.explanation
   const tm = (p?.target_models ?? {}) as Record<string, string>
   const explains = !!(e && outcome && e.model_name === tm.outcome && e.outcome &&
@@ -74,7 +74,7 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
     matchId, home: H, away: A, open,
     outcome,
     btts: typeof rv.btts === 'number' ? rv.btts : null,
-    topScore: top ? [top[0], top[1], top[2]] : null,
+    topScores: tops.map(t => [t[0], t[1], t[2]] as [number, number, number]),
     sides: sidesFor(v, rv),
     reliableTargets: selection.filter(s => s.reliable).map(s => s.target),
     actual: done ? { fthg: m.fthg, ftag: m.ftag, hc: m.hc, ac: m.ac, hy: m.hy, ay: m.ay, hs: m.hs, as: m.as, hst: m.hst, ast: m.ast } : null,

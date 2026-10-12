@@ -9,7 +9,7 @@ const pct = (x: number) => `${Math.round(x * 100)}%`
 export default function MatchCard({ p }: { p: FixtureRow }) {
   const outcome = p.values.outcome as number[] | undefined
   // Same model as the result chances, so the score agrees with them.
-  const top = ((p.resultModel?.values ?? p.values).top_scorelines as number[][] | undefined)?.[0]
+  const tops = ((p.resultModel?.values ?? p.values).top_scorelines as number[][] | undefined)?.slice(0, 3) ?? []
   return (
     <article className="card match">
       <div className="match-time small muted">{p.kickoff_utc ? <LocalTime iso={p.kickoff_utc} withDate={false} /> : p.match_date}</div>
@@ -30,7 +30,9 @@ export default function MatchCard({ p }: { p: FixtureRow }) {
       ) : <p className="muted small">No result probabilities stored.</p>}
       <div className="match-foot">
         <span className="small">
-          {top ? <>Most likely score <strong className="mono">{top[0]}–{top[1]}</strong> <span className="muted">({pct(top[2])})</span></> : null}
+          {tops.length ? <>Likeliest scores{' '}
+            {tops.map((t, i) => <span key={i} className="score-opt"><strong className="mono">{t[0]}–{t[1]}</strong> <span className="muted">{pct(t[2])}</span></span>)}
+          </> : null}
         </span>
         <Link className="btn" href={`/match/${p.match_id}`}>View prediction</Link>
       </div>

@@ -10,7 +10,7 @@ export type MatchData = {
   matchId: string; home: string; away: string; open: boolean
   outcome: number[] | null
   btts: number | null
-  topScore: [number, number, number] | null
+  topScores: [number, number, number][]   // most likely exact scores, best first
   sides: Partial<Record<Stat, Sides>>
   reliableTargets: string[]
   actual: Record<string, number | null> | null   // final statistics once the match is over
@@ -89,8 +89,16 @@ function ResultBlock({ d }: { d: MatchData }) {
         <span style={{ width: `${dr * 100}%`, background: 'var(--bar-d)' }} />
         <span style={{ width: `${a * 100}%`, background: 'var(--bar-a)' }} />
       </div>
-      {d.topScore && (
-        <p className="center small">Most likely score <strong className="mono">{d.home} {d.topScore[0]}–{d.topScore[1]} {d.away}</strong> <span className="muted">({pct(d.topScore[2])})</span></p>
+      {d.topScores.length > 0 && (
+        <div className="scores">
+          <span className="small muted">Likeliest exact scores ({d.home} first)</span>
+          <div className="score-row">
+            {d.topScores.map(([h, a, p]) => (
+              <span key={`${h}-${a}`} className="score-chip"><strong className="mono">{h}–{a}</strong> <span className="muted">{pct(p)}</span></span>
+            ))}
+          </div>
+          <span className="hint">Any single exact score is unlikely; the result chances above are the main prediction.</span>
+        </div>
       )}
     </section>
   )
